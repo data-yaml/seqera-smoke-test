@@ -1,5 +1,6 @@
 #!/usr/bin/env nextflow
-nextflow.enable.dsl=2
+/* groovylint-disable-next-line CompileStatic */
+nextflow.enable.dsl = 2
 
 process tiny_test {
     publishDir params.outdir, mode: 'copy'

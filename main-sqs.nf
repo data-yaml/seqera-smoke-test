@@ -1,4 +1,5 @@
 #!/usr/bin/env nextflow
+/* groovylint-disable-next-line CompileStatic */
 nextflow.enable.dsl = 2
 
 process tiny_test {
@@ -37,91 +38,99 @@ workflow {
 }
 
 workflow.onComplete {
-    def outdir = params.outdir
-    def queueUrl = 'https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA'
-    def region = 'us-east-1'
+    /* groovylint-disable-next-line DuplicateNumberLiteral */
+    final int exitSuccess = 0
 
-    println('')
-    println('========================================')
+    String outdir = params.outdir
+    String queueUrl = 'https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA'
+    String region = 'us-east-1'
+    String emptyLine = ''
+    String separator = '========================================'
+    String encoding = 'UTF-8'
+    String awsCmd = 'aws'
+    String errorDetailsMsg = 'Error details:'
+
+    println(emptyLine)
+    println(separator)
     println('SQS Integration - Starting')
-    println('========================================')
+    println(separator)
     println("Queue URL: ${queueUrl}")
     println("Region: ${region}")
     println("Output folder: ${outdir}")
     println("Workflow status: ${workflow.success ? 'SUCCESS' : 'FAILED'}")
-    println('')
+    println(emptyLine)
 
     // Step 1: Check if AWS CLI is available
     println('Checking AWS CLI availability...')
-    def awsCheck = ['aws', '--version'].execute()
+    Process awsCheck = [awsCmd, '--version'].execute()
     awsCheck.waitFor()
-    if (awsCheck.exitValue() != 0) {
-        println("")
-        println('========================================')
+    if (awsCheck.exitValue() != exitSuccess) {
+        println(emptyLine)
+        println(separator)
         println('ERROR: AWS CLI Not Available')
-        println('========================================')
+        println(separator)
         println('The AWS CLI is not installed or not in PATH in this compute environment.')
-        println("")
+        println(emptyLine)
         println('Required: AWS CLI must be installed in the compute environment container/AMI')
-        println("")
+        println(emptyLine)
         println('This workflow will now FAIL due to missing AWS CLI.')
-        println('========================================')
-        throw 'AWS CLI not available in compute environment'
+        println(separator)
+        throw new IllegalStateException('AWS CLI not available in compute environment')
     }
-    def awsVersion = awsCheck.inputStream.getText('UTF-8').trim()
+    String awsVersion = awsCheck.inputStream.getText(encoding).trim()
     println("✓ AWS CLI found: ${awsVersion}")
-    println('')
+    println(emptyLine)
 
     // Step 2: Check AWS credentials
     println('Checking AWS credentials...')
-    def credsCheck = ['aws', 'sts', 'get-caller-identity'].execute()
+    Process credsCheck = [awsCmd, 'sts', 'get-caller-identity'].execute()
     credsCheck.waitFor()
-    if (credsCheck.exitValue() != 0) {
-        println("")
-        println('========================================')
+    if (credsCheck.exitValue() != exitSuccess) {
+        println(emptyLine)
+        println(separator)
         println('ERROR: AWS Credentials Not Configured')
-        println('========================================')
+        println(separator)
         println('AWS credentials are not available in this compute environment.')
-        println("")
-        println('Error details:')
-        println(credsCheck.errorStream.getText('UTF-8'))
-        println("")
+        println(emptyLine)
+        println(errorDetailsMsg)
+        println(credsCheck.errorStream.getText(encoding))
+        println(emptyLine)
         println('Required: Compute environment must have:')
         println('  - IAM instance role (for AWS Batch/EC2), OR')
         println('  - AWS credentials configured in environment')
-        println("")
+        println(emptyLine)
         println('This workflow will now FAIL due to missing credentials.')
-        println('========================================')
-        throw 'AWS credentials not configured in compute environment'
+        println(separator)
+        throw new IllegalStateException('AWS credentials not configured in compute environment')
     }
-    def identity = credsCheck.inputStream.getText('UTF-8').trim()
+    String identity = credsCheck.inputStream.getText(encoding).trim()
     println('✓ AWS credentials found')
     println("Identity: ${identity}")
-    println('')
+    println(emptyLine)
 
     // Step 3: Send SQS message
     println('Sending SQS message...')
-    def cmd = [
-        'aws', 'sqs', 'send-message',
+    List<String> cmd = [
+        awsCmd, 'sqs', 'send-message',
         '--queue-url', queueUrl,
         '--region', region,
         '--message-body', outdir
     ]
-    def p = cmd.execute()
+    Process p = cmd.execute()
     p.waitFor()
-    if (p.exitValue() != 0) {
-        def errorText = p.errorStream.getText('UTF-8')
-        println("")
-        println('========================================')
+    if (p.exitValue() != exitSuccess) {
+        String errorText = p.errorStream.getText(encoding)
+        println(emptyLine)
+        println(separator)
         println('ERROR: SQS Message Send Failed')
-        println('========================================')
+        println(separator)
         println("Queue URL: ${queueUrl}")
         println("Region: ${region}")
         println("Output folder: ${outdir}")
-        println("")
-        println('Error details:')
+        println(emptyLine)
+        println(errorDetailsMsg)
         println(errorText)
-        println("")
+        println(emptyLine)
         println('Common causes:')
         if (errorText.contains('NonExistentQueue')) {
             println('  - Queue does not exist or URL is incorrect')
@@ -134,27 +143,27 @@ workflow.onComplete {
         } else {
             println('  - Check queue URL and IAM permissions')
         }
-        println("")
+        println(emptyLine)
         println('Required IAM permission on compute environment role:')
         println("  - sqs:SendMessage for queue: ${queueUrl}")
-        println("")
+        println(emptyLine)
         println('This workflow will now FAIL due to SQS send error.')
-        println('========================================')
+        println(separator)
         // FAIL THE WORKFLOW - SQS is a critical requirement
-        throw "SQS message send failed: ${errorText}"
+        throw new IllegalStateException("SQS message send failed: ${errorText}")
     } else {
-        def response = p.inputStream.getText('UTF-8')
-        println('========================================')
+        String response = p.inputStream.getText(encoding)
+        println(separator)
         println('✓✓✓ SQS Integration SUCCESS ✓✓✓')
-        println('========================================')
+        println(separator)
         println('Message sent successfully to queue!')
-        println('')
+        println(emptyLine)
         println("Queue URL: ${queueUrl}")
         println("Region: ${region}")
         println("Output folder: ${outdir}")
-        println('')
+        println(emptyLine)
         println('AWS SQS Response:')
         println(response)
-        println('========================================')
+        println(separator)
     }
 }

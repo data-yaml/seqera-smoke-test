@@ -11,12 +11,14 @@ Create a new test script variant (`test-sqs.sh`) that integrates SQS packaging e
 **Assumption**: `workflow.onComplete` handlers MUST be defined in the main workflow script (`.nf` file), NOT in config files loaded with `-c` flag.
 
 **Rationale**:
+
 - Config files loaded with `-c` are for settings and parameters, not executable code
 - Workflow event handlers (onComplete, onError) are code execution logic
 - While Nextflow documentation suggests handlers can be in config files, practical experience shows this causes errors
 - The existing `sqs.config` file failed when used with `-c` flag for this reason
 
 **Solution**: Create a new workflow file `main-sqs.nf` that includes both:
+
 1. The workflow logic from `main.nf`
 2. The `workflow.onComplete` SQS hook
 
@@ -37,6 +39,7 @@ Create a new test script variant (`test-sqs.sh`) that integrates SQS packaging e
 Create a bash library to house reusable functions from test-tw.sh:
 
 **Functions to Extract**:
+
 - `check_tw_cli()` - Check if tw CLI is installed
 - `check_tw_login()` - Verify logged in to Seqera Platform
 - `check_aws_cli()` - Check if AWS CLI is available (NEW)
@@ -52,6 +55,7 @@ Create a bash library to house reusable functions from test-tw.sh:
 - `print_header()` - Print section headers
 
 **Global Variables**:
+
 ```bash
 YES_FLAG=${YES_FLAG:-false}
 ENV_FILE=${ENV_FILE:-.env}
@@ -75,6 +79,7 @@ Modify existing script to use shared library while maintaining exact same behavi
 Create a new Nextflow workflow script that combines:
 
 1. **Workflow Logic** (from main.nf):
+
    ```groovy
    #!/usr/bin/env nextflow
    nextflow.enable.dsl=2
@@ -116,6 +121,7 @@ Create a new Nextflow workflow script that combines:
    ```
 
 2. **SQS Hook** (from sqs.config, adapted):
+
    ```groovy
    workflow.onComplete {
        def outdir = params.outdir.toString()
@@ -151,6 +157,7 @@ Create a new Nextflow workflow script that combines:
 New script with enhanced functionality:
 
 **Structure**:
+
 ```bash
 #!/bin/bash
 set -e
@@ -213,6 +220,7 @@ main
    - Clear error messages for each failure
 
 2. **launch_workflow_sqs()**: Modified launch command
+
    ```bash
    tw launch https://github.com/data-yaml/seqera-smoke-test \
      --workspace="$WORKSPACE" \
@@ -222,6 +230,7 @@ main
      --params-file "$PARAMS_FILE" \
      --main-script main-sqs.nf
    ```
+
    Note: Uses `--main-script main-sqs.nf` to point to SQS-enabled workflow
 
 3. **wait_for_workflow_completion()**: Poll workflow status
@@ -244,6 +253,7 @@ main
 **Changes**:
 
 1. **QuickStart section** (lines 14-23):
+
    ```markdown
    ## QuickStart
 
@@ -256,6 +266,7 @@ main
    ./test-sqs.sh          # Interactive mode WITH SQS integration
    ./test-sqs.sh --yes    # Automated mode WITH SQS integration
    ```
+
    ```
 
 2. **New section after "Usage"**: Add "Run with SQS Integration" section
@@ -266,6 +277,7 @@ main
    - Configuration details
 
 3. **Files section** (line 182): Update file list
+
    ```markdown
    ## Files
 
@@ -312,6 +324,7 @@ main
 ## Error Handling Scenarios
 
 ### 1. AWS CLI Not Found
+
 ```
 ERROR: AWS CLI not found but required for SQS integration.
 
@@ -321,6 +334,7 @@ Installation:
 ```
 
 ### 2. AWS Credentials Not Configured
+
 ```
 ERROR: AWS credentials not configured.
 
@@ -333,6 +347,7 @@ Or set environment variables:
 ```
 
 ### 3. SQS Queue Inaccessible
+
 ```
 ERROR: Cannot access SQS queue.
 
@@ -349,6 +364,7 @@ Required IAM permissions:
 ```
 
 ### 4. Workflow Failure
+
 ```
 ERROR: Workflow failed with status: FAILED
 
@@ -357,6 +373,7 @@ View details:
 ```
 
 ### 5. SQS Message Not Found
+
 ```
 ERROR: No SQS message found for output directory: s3://bucket/path
 
@@ -372,6 +389,7 @@ Check workflow logs:
 ## Testing Strategy
 
 ### Development Testing
+
 1. Create a test SQS queue for development
 2. Temporarily override `SQS_QUEUE_URL` in script
 3. Run through full workflow
@@ -379,12 +397,14 @@ Check workflow logs:
 5. Clean up test queue
 
 ### Integration Testing Scenarios
+
 1. **First-time setup**: Clean slate, interactive mode
 2. **Automated mode**: Use saved configuration
 3. **Error handling**: No AWS CLI, no permissions, workflow failure
 4. **Concurrent runs**: Multiple runs with different output paths
 
 ### CI/CD Testing
+
 - GitHub Actions workflow to test automated mode
 - Use repository secrets for credentials
 - Test on push to main and PR branches
