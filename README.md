@@ -5,6 +5,7 @@ A simple, self-contained test suite for validating Seqera Platform deployments.
 ## Overview
 
 This repository contains a minimal Nextflow workflow designed to:
+
 - Verify Seqera Platform connectivity
 - Test AWS Batch job execution
 - Validate S3 output publishing
@@ -55,6 +56,7 @@ nextflow run main.nf --outdir results
 ```
 
 Expected output:
+
 - `results/test.txt` containing "Hello from tiny test"
 - Workflow completes successfully
 
@@ -81,6 +83,7 @@ tw launch https://github.com/YOUR_USERNAME/seqera-smoke-test \
 ### 3. Verify Results
 
 Check that:
+
 1. Workflow completes with exit status 0
 2. Output file exists at `s3://your-bucket/smoke-test-results/test.txt`
 3. SQS message sent (if configured)
@@ -96,6 +99,7 @@ Check that:
 ### Profile: `smoke`
 
 Configured in [seqera.config](seqera.config):
+
 - Executor: AWS Batch
 - CPU: 1
 - Memory: 512 MB
@@ -107,10 +111,12 @@ Configured in [seqera.config](seqera.config):
 The workflow sends a completion message to SQS (configured in [nextflow.config](nextflow.config)).
 
 **Current configuration:**
+
 - Queue URL: `https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA`
 - Message body: Output directory path
 
 To disable or modify:
+
 1. Edit [nextflow.config](nextflow.config)
 2. Update `queueUrl` or comment out the `workflow.onComplete` block
 
@@ -126,20 +132,24 @@ To disable or modify:
 ### Common Issues
 
 **Workflow fails immediately:**
+
 - Check AWS credentials: `aws sts get-caller-identity`
 - Verify Seqera Platform connection: `tw info`
 
 **Process hangs on AWS Batch:**
+
 - Check compute environment status in AWS Batch console
 - Verify IAM permissions for Batch execution role
 - Check VPC/subnet configuration
 
 **S3 output not found:**
+
 - Verify bucket exists and permissions are correct
 - Check Batch execution role has S3 write permissions
 - Review CloudWatch logs for the Batch job
 
 **SQS message not delivered:**
+
 - Verify queue URL is correct
 - Check IAM permissions for SQS SendMessage
 - Review workflow completion logs
