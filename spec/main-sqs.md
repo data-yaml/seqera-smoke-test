@@ -2,7 +2,7 @@
 
 ## Overview
 
-Create a new test script variant (`test-tw-sqs.sh`) that integrates SQS packaging events into the Seqera Platform workflow test suite. The script will validate SQS permissions upfront, launch workflows with SQS integration enabled, wait for completion, and verify message delivery.
+Create a new test script variant (`test-sqs.sh`) that integrates SQS packaging events into the Seqera Platform workflow test suite. The script will validate SQS permissions upfront, launch workflows with SQS integration enabled, wait for completion, and verify message delivery.
 
 ## Assumptions and Constraints
 
@@ -144,9 +144,9 @@ Create a new Nextflow workflow script that combines:
 
 **Note**: This approach duplicates some workflow logic but is necessary because workflow handlers must be in the main script file.
 
-### Phase 4: Create test-tw-sqs.sh
+### Phase 4: Create test-sqs.sh
 
-**File**: `test-tw-sqs.sh`
+**File**: `test-sqs.sh`
 
 New script with enhanced functionality:
 
@@ -253,8 +253,8 @@ main
    ./test-local.sh           # Test locally with Docker
    ./test-tw.sh              # Interactive mode - prompts for configuration
    ./test-tw.sh --yes        # Automated mode - uses saved configuration
-   ./test-tw-sqs.sh          # Interactive mode WITH SQS integration
-   ./test-tw-sqs.sh --yes    # Automated mode WITH SQS integration
+   ./test-sqs.sh          # Interactive mode WITH SQS integration
+   ./test-sqs.sh --yes    # Automated mode WITH SQS integration
    ```
    ```
 
@@ -276,7 +276,7 @@ main
    - [seqera.config](seqera.config) - Seqera Platform profile configuration
    - [test-local.sh](test-local.sh) - Local test runner script
    - [test-tw.sh](test-tw.sh) - Seqera Platform workflow launcher (basic)
-   - [test-tw-sqs.sh](test-tw-sqs.sh) - Seqera Platform workflow launcher with SQS integration
+   - [test-sqs.sh](test-sqs.sh) - Seqera Platform workflow launcher with SQS integration
    - [lib/tw-common.sh](lib/tw-common.sh) - Shared library for workflow launchers
    ```
 
@@ -295,14 +295,14 @@ main
 
 1. **lib/tw-common.sh** (NEW) - Shared function library
 2. **main-sqs.nf** (NEW) - Workflow script with embedded workflow.onComplete SQS hook
-3. **test-tw-sqs.sh** (NEW) - SQS integration test script
+3. **test-sqs.sh** (NEW) - SQS integration test script
 4. **test-tw.sh** (MODIFY) - Refactor to use shared library
 5. **README.md** (MODIFY) - Document new functionality
 
 ## Success Criteria
 
 - test-tw.sh maintains exact same behavior after refactoring
-- test-tw-sqs.sh successfully validates SQS permissions before launch
+- test-sqs.sh successfully validates SQS permissions before launch
 - Script launches workflow using main-sqs.nf with SQS hook
 - Script waits for workflow completion and verifies SQS message
 - Clear error messages at each failure point
@@ -394,7 +394,7 @@ Check workflow logs:
 1. **Phase 1**: Create lib/tw-common.sh with extracted functions (low risk)
 2. **Phase 2**: Refactor test-tw.sh to use library (medium risk, test thoroughly)
 3. **Phase 3**: Create main-sqs.nf with embedded SQS hook (high value)
-4. **Phase 4**: Create test-tw-sqs.sh with validation and verification (complex)
+4. **Phase 4**: Create test-sqs.sh with validation and verification (complex)
 5. **Phase 5**: Update README.md with documentation
 
 ## Known Limitations
@@ -402,7 +402,7 @@ Check workflow logs:
 1. **Code Duplication**: main-sqs.nf duplicates logic from main.nf because workflow handlers must be in the main script
 2. **Message Consumption**: If packager service consumes messages quickly, verification may not find the message
 3. **Polling Timeout**: 30-minute timeout may not be sufficient for complex workflows
-4. **Queue Hardcoding**: Queue URL is hardcoded; changing it requires modifying both main-sqs.nf and test-tw-sqs.sh
+4. **Queue Hardcoding**: Queue URL is hardcoded; changing it requires modifying both main-sqs.nf and test-sqs.sh
 
 ## Future Enhancements
 

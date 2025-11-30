@@ -19,8 +19,8 @@ If everything is setup:
 ./test-local.sh           # Test locally with Docker
 ./test-tw.sh              # Interactive mode - prompts for configuration
 ./test-tw.sh --yes        # Automated mode - uses saved configuration
-./test-tw-sqs.sh          # Interactive mode WITH SQS integration
-./test-tw-sqs.sh --yes    # Automated mode WITH SQS integration
+./test-sqs.sh             # Interactive mode WITH SQS integration
+./test-sqs.sh --yes       # Automated mode WITH SQS integration
 ```
 
 Else see below.
@@ -125,7 +125,7 @@ In addition to the base prerequisites, you'll need:
 #### Interactive Mode
 
 ```bash
-./test-tw-sqs.sh
+./test-sqs.sh
 ```
 
 This script will:
@@ -138,7 +138,7 @@ This script will:
 #### Automated Mode
 
 ```bash
-./test-tw-sqs.sh --yes
+./test-sqs.sh --yes
 ```
 
 Uses saved configuration (requires same setup as `test-tw.sh --yes`).
@@ -159,7 +159,7 @@ SQS Queue URL: `https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-Pack
 
 To modify the queue URL, edit both:
 
-- [test-tw-sqs.sh](test-tw-sqs.sh) (line 11: `SQS_QUEUE_URL`)
+- [test-sqs.sh](test-sqs.sh) (line 11: `SQS_QUEUE_URL`)
 - [main-sqs.nf](main-sqs.nf) (line 41: `queueUrl`)
 
 ### 4. Alternative Launch Methods
@@ -246,7 +246,7 @@ To disable or modify:
 - [seqera.config](seqera.config) - Seqera Platform profile configuration
 - [test-local.sh](test-local.sh) - Local test runner script
 - [test-tw.sh](test-tw.sh) - Seqera Platform workflow launcher (basic)
-- [test-tw-sqs.sh](test-tw-sqs.sh) - Seqera Platform workflow launcher with SQS integration
+- [test-sqs.sh](test-sqs.sh) - Seqera Platform workflow launcher with SQS integration
 - [lib/tw-common.sh](lib/tw-common.sh) - Shared library for workflow launchers
 
 ## Troubleshooting
