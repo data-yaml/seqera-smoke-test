@@ -115,14 +115,6 @@ echo ""
 # Write params file
 write_params_file "$PARAMS_FILE" "$S3_BUCKET"
 
-# Debug: Show exact command that will be run
-echo "DEBUG: Command parameters:"
-echo "  WORKSPACE=$WORKSPACE"
-echo "  CURRENT_BRANCH=$CURRENT_BRANCH"
-echo "  COMPUTE_ENV=$COMPUTE_ENV"
-echo "  PARAMS_FILE=$PARAMS_FILE"
-echo ""
-
 # Launch the workflow with main-sqs.nf
 if [ -n "$COMPUTE_ENV" ]; then
     LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
