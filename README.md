@@ -16,9 +16,11 @@ This repository contains a minimal Nextflow workflow designed to:
 If everything is setup:
 
 ```bash
-./test-local.sh        # Test locally with Docker
-./test-tw.sh           # Interactive mode - prompts for configuration
-./test-tw.sh --yes     # Automated mode - uses saved configuration
+./test-local.sh           # Test locally with Docker
+./test-tw.sh              # Interactive mode - prompts for configuration
+./test-tw.sh --yes        # Automated mode - uses saved configuration
+./test-tw-sqs.sh          # Interactive mode WITH SQS integration
+./test-tw-sqs.sh --yes    # Automated mode WITH SQS integration
 ```
 
 Else see below.
@@ -106,7 +108,63 @@ Skips all prompts and uses saved configuration. Requires:
 
 Run without `--yes` first to set up these configurations.
 
-#### Option B: Using Seqera CLI Directly
+### 3. Run with SQS Integration
+
+The SQS integration test script adds validation and verification of SQS message delivery.
+
+#### Prerequisites for SQS Integration
+
+In addition to the base prerequisites, you'll need:
+
+- **AWS CLI** configured with credentials
+- **IAM permissions** for the SQS queue:
+  - `sqs:GetQueueAttributes`
+  - `sqs:SendMessage`
+  - `sqs:ReceiveMessage`
+
+#### Interactive Mode
+
+```bash
+./test-tw-sqs.sh
+```
+
+This script will:
+
+1. Validate SQS permissions before launching the workflow
+2. Launch the workflow using `main-sqs.nf` (which includes the SQS hook)
+3. Wait for workflow completion (polls every 30 seconds, max 10 minutes)
+4. Verify that the SQS message was delivered
+
+#### Automated Mode
+
+```bash
+./test-tw-sqs.sh --yes
+```
+
+Uses saved configuration (requires same setup as `test-tw.sh --yes`).
+
+#### What's Different
+
+The SQS integration test differs from the basic test:
+
+- Uses `main-sqs.nf` instead of `main.nf` (includes `workflow.onComplete` SQS hook)
+- Validates SQS permissions upfront
+- Waits for workflow completion
+- Verifies message delivery to SQS queue
+- Reports success/failure of SQS integration
+
+#### Configuration
+
+SQS Queue URL: `https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA`
+
+To modify the queue URL, edit both:
+
+- [test-tw-sqs.sh](test-tw-sqs.sh) (line 11: `SQS_QUEUE_URL`)
+- [main-sqs.nf](main-sqs.nf) (line 41: `queueUrl`)
+
+### 4. Alternative Launch Methods
+
+#### Option A: Using Seqera CLI Directly
 
 Create a params file (e.g., `params.yaml`):
 
@@ -133,7 +191,7 @@ tw launch https://github.com/data-yaml/seqera-smoke-test \
 5. Parameters:
    - `outdir`: `s3://your-bucket/smoke-test-results`
 
-### 3. Verify Results
+### 5. Verify Results
 
 Check that:
 
@@ -182,9 +240,14 @@ To disable or modify:
 ## Files
 
 - [main.nf](main.nf) - Main workflow definition
-- [nextflow.config](nextflow.config) - Workflow configuration and SQS integration
+- [main-sqs.nf](main-sqs.nf) - Workflow with SQS integration (workflow.onComplete hook)
+- [nextflow.config](nextflow.config) - Base workflow configuration
+- [sqs.config](sqs.config) - SQS configuration reference (deprecated, see main-sqs.nf)
 - [seqera.config](seqera.config) - Seqera Platform profile configuration
 - [test-local.sh](test-local.sh) - Local test runner script
+- [test-tw.sh](test-tw.sh) - Seqera Platform workflow launcher (basic)
+- [test-tw-sqs.sh](test-tw-sqs.sh) - Seqera Platform workflow launcher with SQS integration
+- [lib/tw-common.sh](lib/tw-common.sh) - Shared library for workflow launchers
 
 ## Troubleshooting
 
