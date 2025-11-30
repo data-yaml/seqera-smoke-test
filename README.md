@@ -33,14 +33,16 @@ Else see below.
    - Verify: `nextflow -version`
 
 2. **Seqera Platform CLI (tw)** - Command-line interface for Seqera Platform
-   - Installation: <https://docs.seqera.io/platform/latest/cli/cli>
+   - Repository: <https://github.com/seqeralabs/tower-cli>
+   - Documentation: <https://docs.seqera.io/platform/latest/cli/cli>
    - Quick install:
 
      ```bash
-     # Linux
-     curl -fsSL https://github.com/seqeralabs/tower-cli/releases/latest/download/tw-linux-x86_64 -o tw
-     chmod +x tw
-     sudo mv tw /usr/local/bin/
+     # Homebrew (macOS/Linux)
+     brew install seqeralabs/tap/tw
+
+     # Or download directly from releases
+     # https://github.com/seqeralabs/tower-cli/releases/latest
      ```
 
    - Configure: `tw login`

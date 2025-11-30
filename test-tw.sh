@@ -13,8 +13,10 @@ if ! command -v tw &> /dev/null; then
     echo "ERROR: tw CLI not found. Please install Seqera Platform CLI first."
     echo ""
     echo "Installation:"
-    echo "  macOS:   brew install nf-tower-cli"
-    echo "  Linux:   curl -fsSL https://github.com/seqeralabs/tower-cli/releases/latest/download/tw-linux-x86_64 -o tw"
+    echo "  Homebrew:  brew install seqeralabs/tap/tw"
+    echo "  Direct:    https://github.com/seqeralabs/tower-cli/releases/latest"
+    echo ""
+    echo "See: https://github.com/seqeralabs/tower-cli"
     echo ""
     exit 1
 fi
