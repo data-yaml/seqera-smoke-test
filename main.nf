@@ -1,13 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-process {
-    executor = 'awsbatch'
-    container = 'ubuntu:22.04'
-}
-
-params.outdir = params.outdir ?: 'results'
-
 process tiny_test {
     publishDir params.outdir, mode: 'copy'
 
