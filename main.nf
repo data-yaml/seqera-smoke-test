@@ -1,13 +1,14 @@
 #!/usr/bin/env nextflow
+nextflow.enable.dsl=2
 
-params.outdir = params.outdir ?: "results"
+params.outdir = params.outdir ?: 'results'
 
 process tiny_test {
     publishDir params.outdir, mode: 'copy'
 
     output:
-    path "test.txt"
-    path "system-info.txt"
+    path 'test.txt'
+    path 'system-info.txt'
 
     script:
     """
