@@ -341,10 +341,9 @@ if [ -n "$RUN_ID" ]; then
     echo "Run ID: $RUN_ID"
     echo ""
     echo "Next steps:"
-    echo "1. Monitor workflow progress: tw runs list --workspace='$WORKSPACE' | grep $RUN_ID"
-    echo "2. View workflow details: tw runs view -i $RUN_ID --workspace='$WORKSPACE'"
-    echo "3. View workflow tasks: tw runs view -i $RUN_ID tasks --workspace='$WORKSPACE'"
-    echo "4. Verify S3 output: aws s3 ls $S3_BUCKET/"
+    echo "1. View workflow details: tw runs view -i $RUN_ID --workspace='$WORKSPACE'"
+    echo "2. View workflow tasks: tw runs view -i $RUN_ID tasks --workspace='$WORKSPACE'"
+    echo "3. Verify S3 output: aws s3 ls $S3_BUCKET/"
 else
     echo "⚠ Could not extract run ID from output."
     echo ""
