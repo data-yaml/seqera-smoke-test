@@ -1,5 +1,5 @@
 #!/usr/bin/env nextflow
-nextflow.enable.dsl=2
+nextflow.enable.dsl = 2
 
 process tiny_test {
     publishDir params.outdir, mode: 'copy'
@@ -37,22 +37,22 @@ workflow {
 }
 
 workflow.onComplete {
-    def outdir = params.outdir.toString()
-    def queueUrl = "https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA"
-    def region = "us-east-1"
+    String outdir = params.outdir
+    String queueUrl = 'https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA'
+    String region = 'us-east-1'
 
-    println ""
-    println "========================================"
-    println "SQS Integration - Starting"
-    println "========================================"
+    println ''
+    println '========================================'
+    println 'SQS Integration - Starting'
+    println '========================================'
     println "Queue URL: ${queueUrl}"
     println "Region: ${region}"
     println "Output folder: ${outdir}"
     println "Workflow status: ${workflow.success ? 'SUCCESS' : 'FAILED'}"
-    println ""
+    println ''
 
     // Step 1: Check if AWS CLI is available
-    println "Checking AWS CLI availability..."
+    println 'Checking AWS CLI availability...'
     def awsCheck = ['aws', '--version'].execute()
     awsCheck.waitFor()
 
@@ -70,12 +70,12 @@ workflow.onComplete {
         throw new Exception("AWS CLI not available in compute environment")
     }
 
-    def awsVersion = awsCheck.in.text.trim()
+    String awsVersion = awsCheck.in.text.trim()
     println "✓ AWS CLI found: ${awsVersion}"
-    println ""
+    println ''
 
     // Step 2: Check AWS credentials
-    println "Checking AWS credentials..."
+    println 'Checking AWS credentials...'
     def credsCheck = ['aws', 'sts', 'get-caller-identity'].execute()
     credsCheck.waitFor()
 
@@ -98,13 +98,13 @@ workflow.onComplete {
         throw new Exception("AWS credentials not configured in compute environment")
     }
 
-    def identity = credsCheck.in.text.trim()
-    println "✓ AWS credentials found"
+    String identity = credsCheck.in.text.trim()
+    println '✓ AWS credentials found'
     println "Identity: ${identity}"
-    println ""
+    println ''
 
     // Step 3: Send SQS message
-    println "Sending SQS message..."
+    println 'Sending SQS message...'
     def cmd = [
         'aws', 'sqs', 'send-message',
         '--queue-url', queueUrl,
@@ -116,7 +116,7 @@ workflow.onComplete {
     p.waitFor()
 
     if (p.exitValue() != 0) {
-        def errorText = p.err.text
+        String errorText = p.err.text
         println ""
         println "========================================"
         println "ERROR: SQS Message Send Failed"
@@ -150,7 +150,7 @@ workflow.onComplete {
         // FAIL THE WORKFLOW - SQS is a critical requirement
         throw new Exception("SQS message send failed: ${errorText}")
     } else {
-        def response = p.in.text
+        String response = p.in.text
         println "========================================"
         println "✓✓✓ SQS Integration SUCCESS ✓✓✓"
         println "========================================"

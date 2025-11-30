@@ -48,6 +48,9 @@ get_or_prompt_s3_bucket "$PARAMS_FILE"
 # Detect current git branch
 CURRENT_BRANCH=$(detect_git_branch)
 
+# Check git status (uncommitted/unpushed changes)
+check_git_status
+
 echo ""
 
 # Get compute environment details if a specific compute env is set

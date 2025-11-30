@@ -36,7 +36,15 @@ echo "Checking prerequisites..."
 check_tw_cli
 check_tw_login
 
-# Note: AWS validation skipped - SQS access is handled by Seqera Platform's AWS environment
+# NOTE: AWS CLI validation intentionally skipped!
+# SQS messages are sent from within the Seqera Platform compute environment,
+# NOT from this local machine. The compute environment must have:
+# 1. AWS credentials (IAM role or configured credentials)
+# 2. Permissions: sqs:SendMessage on the target queue
+#
+# Local AWS credentials are NOT used and NOT required for this test.
+
+echo ""
 
 # Check and prompt for TOWER_ACCESS_TOKEN
 get_or_prompt_token
@@ -53,6 +61,9 @@ get_or_prompt_s3_bucket "$PARAMS_FILE"
 
 # Detect current git branch
 CURRENT_BRANCH=$(detect_git_branch)
+
+# Check git status (uncommitted/unpushed changes)
+check_git_status
 
 echo ""
 
