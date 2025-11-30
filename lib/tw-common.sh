@@ -428,6 +428,9 @@ check_git_status() {
             echo ""
             echo "✓ Successfully pushed $unpushed commit(s) to origin/$branch"
             echo ""
+            echo "Waiting 3 seconds for GitHub to process push..."
+            sleep 3
+            echo ""
         else
             echo ""
             echo "ERROR: Failed to push commits to origin/$branch"
