@@ -1,0 +1,42 @@
+# Nextflow files
+.nextflow/
+.nextflow.log*
+work/
+results/
+timeline.html
+report.html
+trace.txt
+dag.dot
+dag.html
+dag.svg
+
+# Nextflow config files (keeping tracked ones)
+# Remove the line below if you want to track all config files
+# *.config
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
