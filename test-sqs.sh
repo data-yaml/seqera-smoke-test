@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+# Note: set -e removed - we manually check exit codes throughout the script
 
 # Get script directory and source common library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -137,7 +137,7 @@ if [ $LAUNCH_EXIT_CODE -ne 0 ]; then
 fi
 
 # Extract run ID from the output (format: "Workflow <RUN_ID> submitted")
-RUN_ID=$(echo "$LAUNCH_OUTPUT" | grep -oE '[0-9a-zA-Z]{14}' | head -1)
+RUN_ID=$(echo "$LAUNCH_OUTPUT" | grep -oE 'Workflow [0-9a-zA-Z]+ submitted' | grep -oE '[0-9a-zA-Z]{14,}' | head -1)
 
 echo ""
 echo "========================================"
