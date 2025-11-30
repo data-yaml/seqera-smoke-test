@@ -103,12 +103,37 @@ fi
 
 echo ""
 
-# Check if workspace is already set from environment
-if [ -n "$TOWER_WORKSPACE_ID" ]; then
-    echo "Using workspace from environment: $TOWER_WORKSPACE_ID"
-    WORKSPACE="$TOWER_WORKSPACE_ID"
+# Check if workspace is already saved
+if [ -f "$ENV_FILE" ] && grep -q "^TOWER_WORKSPACE_ID=" "$ENV_FILE"; then
+    SAVED_WORKSPACE=$(grep "^TOWER_WORKSPACE_ID=" "$ENV_FILE" | cut -d'=' -f2-)
+    echo "Found saved workspace: $SAVED_WORKSPACE"
     echo ""
+    read -p "Use this workspace? (Y/n): " -n 1 -r
+    echo ""
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        WORKSPACE="$SAVED_WORKSPACE"
+        echo "Using workspace: $WORKSPACE"
+    else
+        # Prompt for new workspace
+        echo "Enter workspace in Organization/Workspace format"
+        echo "(e.g., Quilt_Data/hackathon_2023):"
+        read -r WORKSPACE
+
+        if [ -z "$WORKSPACE" ]; then
+            echo "ERROR: Workspace is required."
+            exit 1
+        fi
+
+        # Update .env file with new workspace
+        grep -v "^TOWER_WORKSPACE_ID=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
+        echo "TOWER_WORKSPACE_ID=$WORKSPACE" >> "${ENV_FILE}.tmp"
+        mv "${ENV_FILE}.tmp" "$ENV_FILE"
+        echo "✓ Workspace saved to $ENV_FILE"
+    fi
 else
+    # No saved workspace - prompt for it
     echo "Enter workspace in Organization/Workspace format"
     echo "(e.g., Quilt_Data/hackathon_2023):"
     read -r WORKSPACE
@@ -118,13 +143,10 @@ else
         exit 1
     fi
 
-    # Save the workspace for future runs
+    # Save workspace to .env
     echo ""
     echo "Saving workspace to $ENV_FILE for future use..."
-
-    # Append or update the .env file
     if [ -f "$ENV_FILE" ]; then
-        # Remove old TOWER_WORKSPACE_ID if exists, then append new one
         grep -v "^TOWER_WORKSPACE_ID=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
         echo "TOWER_WORKSPACE_ID=$WORKSPACE" >> "${ENV_FILE}.tmp"
         mv "${ENV_FILE}.tmp" "$ENV_FILE"
@@ -132,8 +154,9 @@ else
         echo "TOWER_WORKSPACE_ID=$WORKSPACE" >> "$ENV_FILE"
     fi
     echo "✓ Workspace saved"
-    echo ""
 fi
+
+echo ""
 
 # Create work directory if it doesn't exist
 mkdir -p work
@@ -216,12 +239,15 @@ echo "Workflow Submitted!"
 echo "========================================"
 echo ""
 echo "Next steps:"
-echo "1. Monitor workflow progress: tw runs list"
-echo "2. View workflow details: tw runs view <run-id>"
-echo "3. Check logs: tw runs logs <run-id>"
+echo "1. Monitor workflow progress: tw runs list --workspace='$WORKSPACE'"
+echo "2. View workflow details: tw runs view <run-id> --workspace='$WORKSPACE'"
+echo "3. Check logs: tw runs logs <run-id> --workspace='$WORKSPACE'"
 echo "4. Verify S3 output: aws s3 ls $S3_BUCKET/"
 echo ""
-echo "Note: If you see 'No available compute environment' error,"
+echo "Note: Workspace saved to $ENV_FILE for next run."
+echo "      Remember to use --workspace='$WORKSPACE' with tw commands."
+echo ""
+echo "If you see 'No available compute environment' error,"
 echo "you need to configure a compute environment in Seqera Platform."
-echo "Use: tw compute-envs list"
+echo "Use: tw compute-envs list --workspace='$WORKSPACE'"
 echo ""
