@@ -34,10 +34,65 @@ fi
 echo "✓ Logged in to Seqera Platform"
 echo ""
 
-# Prompt for S3 bucket
-echo "Enter S3 bucket path for workflow outputs"
-echo "(e.g., s3://my-bucket/smoke-test-results):"
-read -r S3_BUCKET
+# Check for workspaces
+echo "Checking workspaces..."
+WORKSPACES=$(tw workspaces list 2>/dev/null)
+if [ $? -ne 0 ] || [ -z "$WORKSPACES" ]; then
+    echo "ERROR: Unable to list workspaces."
+    exit 1
+fi
+
+# Count workspaces (excluding header)
+WORKSPACE_COUNT=$(echo "$WORKSPACES" | tail -n +3 | wc -l | tr -d ' ')
+
+if [ "$WORKSPACE_COUNT" -eq 0 ]; then
+    echo "ERROR: No workspaces found."
+    exit 1
+elif [ "$WORKSPACE_COUNT" -eq 1 ]; then
+    # Only one workspace - use it automatically
+    WORKSPACE=$(echo "$WORKSPACES" | tail -n +3 | awk '{print $3 "/" $2}')
+    echo "✓ Using workspace: $WORKSPACE"
+else
+    # Multiple workspaces - show list and ask
+    echo "Available workspaces:"
+    echo "$WORKSPACES" | tail -n +3 | awk '{print "  - " $3 "/" $2}'
+    echo ""
+    echo "Enter workspace (Organization/Workspace format):"
+    read -r WORKSPACE
+fi
+echo ""
+
+# Create work directory if it doesn't exist
+mkdir -p work
+PARAMS_FILE="work/params.yaml"
+
+# Check if params file already exists and offer to reuse
+if [ -f "$PARAMS_FILE" ]; then
+    EXISTING_OUTDIR=$(grep "^outdir:" "$PARAMS_FILE" | cut -d' ' -f2- | tr -d ' ')
+    echo "Found existing params file with:"
+    echo "  outdir: $EXISTING_OUTDIR"
+    echo ""
+    read -p "Reuse this S3 bucket? (Y/n): " -n 1 -r
+    echo ""
+    echo ""
+
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        # User wants to use new bucket - prompt for it
+        echo "Enter S3 bucket path for workflow outputs"
+        echo "(e.g., s3://my-bucket/smoke-test-results):"
+        read -r S3_BUCKET
+    else
+        # Reuse existing bucket
+        S3_BUCKET="$EXISTING_OUTDIR"
+        echo "Reusing: $S3_BUCKET"
+        echo ""
+    fi
+else
+    # No existing params file - prompt for S3 bucket
+    echo "Enter S3 bucket path for workflow outputs"
+    echo "(e.g., s3://my-bucket/smoke-test-results):"
+    read -r S3_BUCKET
+fi
 
 # Validate S3 bucket format
 if [[ ! "$S3_BUCKET" =~ ^s3:// ]]; then
@@ -67,11 +122,20 @@ echo ""
 echo "Launching workflow via Seqera Platform..."
 echo ""
 
+# Write params file
+cat > "$PARAMS_FILE" <<EOF
+outdir: $S3_BUCKET
+EOF
+
+echo "Parameters saved to: $PARAMS_FILE"
+echo ""
+
 # Launch the workflow
 tw launch https://github.com/data-yaml/seqera-smoke-test \
+  --workspace="$WORKSPACE" \
   --profile smoke \
   --config seqera.config \
-  --outdir "$S3_BUCKET"
+  --params-file "$PARAMS_FILE"
 
 echo ""
 echo "========================================"
@@ -83,4 +147,8 @@ echo "1. Monitor workflow progress: tw runs list"
 echo "2. View workflow details: tw runs view <run-id>"
 echo "3. Check logs: tw runs logs <run-id>"
 echo "4. Verify S3 output: aws s3 ls $S3_BUCKET/"
+echo ""
+echo "Note: If you see 'No available compute environment' error,"
+echo "you need to configure a compute environment in Seqera Platform."
+echo "Use: tw compute-envs list"
 echo ""
