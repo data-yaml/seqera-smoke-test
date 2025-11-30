@@ -31,97 +31,12 @@ print_header "Seqera Platform Smoke Test - SQS Integration"
 # Load environment variables from .env if it exists
 load_env_file
 
-# Check prerequisites (AWS CLI is REQUIRED for SQS integration)
+# Check prerequisites
 echo "Checking prerequisites..."
 check_tw_cli
 check_tw_login
-check_aws_cli
 
-# Validate SQS permissions before launch
-validate_sqs_permissions() {
-    echo ""
-    print_header "Validating SQS Permissions"
-
-    # Check if AWS credentials are configured
-    echo "Checking AWS credentials..."
-    if ! aws sts get-caller-identity --region "$QUEUE_REGION" &> /dev/null; then
-        echo "ERROR: AWS credentials not configured."
-        echo ""
-        echo "Please configure AWS credentials:"
-        echo "  aws configure"
-        echo ""
-        echo "Or set environment variables:"
-        echo "  export AWS_ACCESS_KEY_ID=..."
-        echo "  export AWS_SECRET_ACCESS_KEY=..."
-        echo ""
-        exit 1
-    fi
-    echo "✓ AWS credentials configured"
-
-    # Check queue access
-    echo "Checking SQS queue access..."
-    if ! aws sqs get-queue-attributes \
-        --queue-url "$SQS_QUEUE_URL" \
-        --region "$QUEUE_REGION" \
-        --attribute-names QueueArn \
-        &> /dev/null; then
-        echo "ERROR: Cannot access SQS queue."
-        echo ""
-        echo "Possible causes:"
-        echo "  1. Queue does not exist"
-        echo "  2. Incorrect queue URL: $SQS_QUEUE_URL"
-        echo "  3. Missing IAM permissions for sqs:GetQueueAttributes"
-        echo "  4. Wrong AWS region selected (queue is in $QUEUE_REGION)"
-        echo ""
-        echo "Required IAM permissions:"
-        echo "  - sqs:GetQueueAttributes"
-        echo "  - sqs:SendMessage"
-        echo "  - sqs:ReceiveMessage"
-        echo ""
-        exit 1
-    fi
-    echo "✓ SQS queue accessible"
-
-    # Test send permission
-    echo "Testing SQS send permission..."
-    TEST_MESSAGE="seqera-smoke-test-validation-$(date +%s)"
-    if ! aws sqs send-message \
-        --queue-url "$SQS_QUEUE_URL" \
-        --region "$QUEUE_REGION" \
-        --message-body "$TEST_MESSAGE" \
-        &> /dev/null; then
-        echo "ERROR: Cannot send message to SQS queue."
-        echo ""
-        echo "Missing IAM permission: sqs:SendMessage"
-        echo "Queue URL: $SQS_QUEUE_URL"
-        echo ""
-        exit 1
-    fi
-    echo "✓ SQS send permission verified"
-
-    # Test receive permission
-    echo "Testing SQS receive permission..."
-    if ! aws sqs receive-message \
-        --queue-url "$SQS_QUEUE_URL" \
-        --region "$QUEUE_REGION" \
-        --max-number-of-messages 1 \
-        &> /dev/null; then
-        echo "ERROR: Cannot receive messages from SQS queue."
-        echo ""
-        echo "Missing IAM permission: sqs:ReceiveMessage"
-        echo "Queue URL: $SQS_QUEUE_URL"
-        echo ""
-        exit 1
-    fi
-    echo "✓ SQS receive permission verified"
-
-    echo ""
-    echo "All SQS permissions validated successfully!"
-    echo ""
-}
-
-# Validate SQS permissions
-validate_sqs_permissions
+# Note: AWS validation skipped - SQS access is handled by Seqera Platform's AWS environment
 
 # Check and prompt for TOWER_ACCESS_TOKEN
 get_or_prompt_token
