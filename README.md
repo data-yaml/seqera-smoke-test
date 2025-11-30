@@ -11,6 +11,17 @@ This repository contains a minimal Nextflow workflow designed to:
 - Validate S3 output publishing
 - Confirm SQS message delivery (optional)
 
+## QuickStart
+
+If everything is setup:
+
+```bash
+./test-local.sh
+./test-tw.sh  # prompts for S3 output bucket
+```
+
+Else see below.
+
 ## Prerequisites
 
 ### Required Tools
@@ -18,6 +29,7 @@ This repository contains a minimal Nextflow workflow designed to:
 1. **Nextflow** - Workflow orchestration engine
    - Installation: <https://www.nextflow.io/docs/latest/install.html>
    - Quick install: `curl -s https://get.nextflow.io | bash`
+   - macOS: brew install nextflow
    - Verify: `nextflow -version`
 
 2. **Seqera Platform CLI (tw)** - Command-line interface for Seqera Platform
@@ -25,7 +37,7 @@ This repository contains a minimal Nextflow workflow designed to:
    - Quick install:
 
      ```bash
-     # macOS/Linux
+     # Linux
      curl -fsSL https://github.com/seqeralabs/tower-cli/releases/latest/download/tw-linux-x86_64 -o tw
      chmod +x tw
      sudo mv tw /usr/local/bin/
@@ -45,7 +57,7 @@ This repository contains a minimal Nextflow workflow designed to:
 - AWS Batch compute environment configured in Seqera Platform
 - S3 bucket for workflow outputs (if running on AWS)
 
-## Quick Start
+## Usage
 
 ### 1. Local Test (No Seqera Platform)
 
@@ -65,7 +77,7 @@ Expected output:
 #### Option A: Using Seqera CLI
 
 ```bash
-tw launch https://github.com/YOUR_USERNAME/seqera-smoke-test \
+tw launch https://github.com/data-yaml/seqera-smoke-test \
   --profile smoke \
   --config seqera.config \
   --outdir s3://your-bucket/smoke-test-results
@@ -75,7 +87,7 @@ tw launch https://github.com/YOUR_USERNAME/seqera-smoke-test \
 
 1. Navigate to Launchpad
 2. Add new pipeline
-3. Pipeline URL: `https://github.com/YOUR_USERNAME/seqera-smoke-test`
+3. Pipeline URL: `https://github.com/data-yaml/seqera-smoke-test`
 4. Config profiles: `smoke`
 5. Parameters:
    - `outdir`: `s3://your-bucket/smoke-test-results`
