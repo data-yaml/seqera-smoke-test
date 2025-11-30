@@ -12,10 +12,37 @@ This repository contains a minimal Nextflow workflow designed to:
 
 ## Prerequisites
 
-- Nextflow installed (`nextflow -version`)
-- AWS CLI configured with appropriate credentials
-- Seqera Platform CLI (`tw`) installed and configured
-- Access to Seqera Platform workspace
+### Required Tools
+
+1. **Nextflow** - Workflow orchestration engine
+   - Installation: <https://www.nextflow.io/docs/latest/install.html>
+   - Quick install: `curl -s https://get.nextflow.io | bash`
+   - Verify: `nextflow -version`
+
+2. **Seqera Platform CLI (tw)** - Command-line interface for Seqera Platform
+   - Installation: <https://docs.seqera.io/platform/latest/cli/cli>
+   - Quick install:
+
+     ```bash
+     # macOS/Linux
+     curl -fsSL https://github.com/seqeralabs/tower-cli/releases/latest/download/tw-linux-x86_64 -o tw
+     chmod +x tw
+     sudo mv tw /usr/local/bin/
+     ```
+
+   - Configure: `tw login`
+   - Verify: `tw info`
+
+3. **AWS CLI** (optional, for SQS notifications)
+   - Installation: <https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html>
+   - Configure: `aws configure`
+   - Verify: `aws sts get-caller-identity`
+
+### Access Requirements
+
+- Seqera Platform workspace with appropriate permissions
+- AWS Batch compute environment configured in Seqera Platform
+- S3 bucket for workflow outputs (if running on AWS)
 
 ## Quick Start
 
