@@ -1,6 +1,22 @@
 #!/bin/bash
 set -e
 
+# Parse command line arguments
+YES_FLAG=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --yes|-y)
+            YES_FLAG=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--yes|-y]"
+            exit 1
+            ;;
+    esac
+done
+
 echo "========================================"
 echo "Seqera Platform Smoke Test - tw CLI"
 echo "========================================"
@@ -124,32 +140,45 @@ if [ -f "$ENV_FILE" ] && grep -q "^TOWER_WORKSPACE_ID=" "$ENV_FILE"; then
     SAVED_WORKSPACE=$(grep "^TOWER_WORKSPACE_ID=" "$ENV_FILE" | cut -d'=' -f2-)
     echo "Found saved workspace: $SAVED_WORKSPACE"
     echo ""
-    read -p "Use this workspace? (Y/n): " -n 1 -r
-    echo ""
-    echo ""
 
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    if [ "$YES_FLAG" = true ]; then
         WORKSPACE="$SAVED_WORKSPACE"
-        echo "Using workspace: $WORKSPACE"
+        echo "Using workspace: $WORKSPACE (--yes flag)"
     else
-        # Prompt for new workspace
-        echo "Enter workspace in Organization/Workspace format"
-        echo "(e.g., Quilt_Data/hackathon_2023):"
-        read -r WORKSPACE
+        read -p "Use this workspace? (Y/n): " -n 1 -r
+        echo ""
+        echo ""
 
-        if [ -z "$WORKSPACE" ]; then
-            echo "ERROR: Workspace is required."
-            exit 1
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            WORKSPACE="$SAVED_WORKSPACE"
+            echo "Using workspace: $WORKSPACE"
+        else
+            # Prompt for new workspace
+            echo "Enter workspace in Organization/Workspace format"
+            echo "(e.g., Quilt_Data/hackathon_2023):"
+            read -r WORKSPACE
+
+            if [ -z "$WORKSPACE" ]; then
+                echo "ERROR: Workspace is required."
+                exit 1
+            fi
+
+            # Update .env file with new workspace
+            grep -v "^TOWER_WORKSPACE_ID=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
+            echo "TOWER_WORKSPACE_ID=$WORKSPACE" >> "${ENV_FILE}.tmp"
+            mv "${ENV_FILE}.tmp" "$ENV_FILE"
+            echo "✓ Workspace saved to $ENV_FILE"
         fi
-
-        # Update .env file with new workspace
-        grep -v "^TOWER_WORKSPACE_ID=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
-        echo "TOWER_WORKSPACE_ID=$WORKSPACE" >> "${ENV_FILE}.tmp"
-        mv "${ENV_FILE}.tmp" "$ENV_FILE"
-        echo "✓ Workspace saved to $ENV_FILE"
     fi
 else
-    # No saved workspace - prompt for it
+    # No saved workspace - error if --yes flag is used
+    if [ "$YES_FLAG" = true ]; then
+        echo "ERROR: --yes flag requires TOWER_WORKSPACE_ID in $ENV_FILE"
+        echo "Run without --yes first to configure workspace."
+        exit 1
+    fi
+
+    # Prompt for workspace
     echo "Enter workspace in Organization/Workspace format"
     echo "(e.g., Quilt_Data/hackathon_2023):"
     read -r WORKSPACE
@@ -197,49 +226,62 @@ if [ -f "$ENV_FILE" ] && grep -q "^TOWER_COMPUTE_ENV=" "$ENV_FILE"; then
     SAVED_COMPUTE_ENV=$(grep "^TOWER_COMPUTE_ENV=" "$ENV_FILE" | cut -d'=' -f2-)
     echo "Found saved compute environment: $SAVED_COMPUTE_ENV"
     echo ""
-    read -p "Use this compute environment? (Y/n): " -n 1 -r
-    echo ""
-    echo ""
 
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    if [ "$YES_FLAG" = true ]; then
         COMPUTE_ENV="$SAVED_COMPUTE_ENV"
-        echo "Using compute environment: $COMPUTE_ENV"
+        echo "Using compute environment: $COMPUTE_ENV (--yes flag)"
     else
-        # Prompt for new compute environment
-        echo "Enter compute environment name from the list above:"
-        read -r COMPUTE_ENV
-
-        if [ -z "$COMPUTE_ENV" ]; then
-            echo "ERROR: Compute environment is required."
-            exit 1
-        fi
-
-        # Update .env file with new compute environment
-        grep -v "^TOWER_COMPUTE_ENV=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
-        echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "${ENV_FILE}.tmp"
-        mv "${ENV_FILE}.tmp" "$ENV_FILE"
-        echo "✓ Compute environment saved to $ENV_FILE"
-    fi
-else
-    # No saved compute environment - prompt for it
-    echo "Enter compute environment name from the list above"
-    echo "(or press Enter to use primary/default):"
-    read -r COMPUTE_ENV
-
-    if [ -n "$COMPUTE_ENV" ]; then
-        # Save compute environment to .env
+        read -p "Use this compute environment? (Y/n): " -n 1 -r
         echo ""
-        echo "Saving compute environment to $ENV_FILE for future use..."
-        if [ -f "$ENV_FILE" ]; then
+        echo ""
+
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            COMPUTE_ENV="$SAVED_COMPUTE_ENV"
+            echo "Using compute environment: $COMPUTE_ENV"
+        else
+            # Prompt for new compute environment
+            echo "Enter compute environment name from the list above:"
+            read -r COMPUTE_ENV
+
+            if [ -z "$COMPUTE_ENV" ]; then
+                echo "ERROR: Compute environment is required."
+                exit 1
+            fi
+
+            # Update .env file with new compute environment
             grep -v "^TOWER_COMPUTE_ENV=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
             echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "${ENV_FILE}.tmp"
             mv "${ENV_FILE}.tmp" "$ENV_FILE"
-        else
-            echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "$ENV_FILE"
+            echo "✓ Compute environment saved to $ENV_FILE"
         fi
-        echo "✓ Compute environment saved"
+    fi
+else
+    # No saved compute environment
+    if [ "$YES_FLAG" = true ]; then
+        # Use default/primary when --yes is set
+        COMPUTE_ENV=""
+        echo "Using workspace default/primary compute environment (--yes flag)"
     else
-        echo "Using workspace default/primary compute environment"
+        # Prompt for compute environment
+        echo "Enter compute environment name from the list above"
+        echo "(or press Enter to use primary/default):"
+        read -r COMPUTE_ENV
+
+        if [ -n "$COMPUTE_ENV" ]; then
+            # Save compute environment to .env
+            echo ""
+            echo "Saving compute environment to $ENV_FILE for future use..."
+            if [ -f "$ENV_FILE" ]; then
+                grep -v "^TOWER_COMPUTE_ENV=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
+                echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "${ENV_FILE}.tmp"
+                mv "${ENV_FILE}.tmp" "$ENV_FILE"
+            else
+                echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "$ENV_FILE"
+            fi
+            echo "✓ Compute environment saved"
+        else
+            echo "Using workspace default/primary compute environment"
+        fi
     fi
 fi
 
@@ -255,23 +297,38 @@ if [ -f "$PARAMS_FILE" ]; then
     echo "Found existing params file with:"
     echo "  outdir: $EXISTING_OUTDIR"
     echo ""
-    read -p "Reuse this S3 bucket? (Y/n): " -n 1 -r
-    echo ""
-    echo ""
 
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
-        # User wants to use new bucket - prompt for it
-        echo "Enter S3 bucket path for workflow outputs"
-        echo "(e.g., s3://my-bucket/smoke-test-results):"
-        read -r S3_BUCKET
-    else
-        # Reuse existing bucket
+    if [ "$YES_FLAG" = true ]; then
+        # Reuse existing bucket when --yes is set
         S3_BUCKET="$EXISTING_OUTDIR"
-        echo "Reusing: $S3_BUCKET"
+        echo "Reusing: $S3_BUCKET (--yes flag)"
         echo ""
+    else
+        read -p "Reuse this S3 bucket? (Y/n): " -n 1 -r
+        echo ""
+        echo ""
+
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            # User wants to use new bucket - prompt for it
+            echo "Enter S3 bucket path for workflow outputs"
+            echo "(e.g., s3://my-bucket/smoke-test-results):"
+            read -r S3_BUCKET
+        else
+            # Reuse existing bucket
+            S3_BUCKET="$EXISTING_OUTDIR"
+            echo "Reusing: $S3_BUCKET"
+            echo ""
+        fi
     fi
 else
-    # No existing params file - prompt for S3 bucket
+    # No existing params file
+    if [ "$YES_FLAG" = true ]; then
+        echo "ERROR: --yes flag requires existing params file with S3 bucket"
+        echo "Run without --yes first to configure S3 bucket."
+        exit 1
+    fi
+
+    # Prompt for S3 bucket
     echo "Enter S3 bucket path for workflow outputs"
     echo "(e.g., s3://my-bucket/smoke-test-results):"
     read -r S3_BUCKET
@@ -304,12 +361,16 @@ echo "  Output: $S3_BUCKET"
 echo ""
 
 # Confirm before launching
-read -p "Launch workflow? (y/N): " -n 1 -r
-echo ""
+if [ "$YES_FLAG" = true ]; then
+    echo "Launching workflow (--yes flag)..."
+else
+    read -p "Launch workflow? (y/N): " -n 1 -r
+    echo ""
 
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Cancelled."
-    exit 0
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Cancelled."
+        exit 0
+    fi
 fi
 
 echo ""
