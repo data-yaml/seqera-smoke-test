@@ -355,7 +355,7 @@ echo ""
 echo "Configuration:"
 echo "  Pipeline: https://github.com/data-yaml/seqera-smoke-test"
 echo "  Branch: $CURRENT_BRANCH"
-echo "  Profile: smoke"
+echo "  Profile: awsbatch"
 echo "  Compute Environment: ${COMPUTE_ENV:-default}"
 echo "  Output: $S3_BUCKET"
 echo ""
@@ -391,19 +391,29 @@ if [ -n "$COMPUTE_ENV" ]; then
       --workspace="$WORKSPACE" \
       --revision="$CURRENT_BRANCH" \
       --compute-env="$COMPUTE_ENV" \
-      --profile smoke \
-      --config seqera.config \
+      --profile awsbatch \
       --params-file "$PARAMS_FILE" 2>&1)
+    LAUNCH_EXIT_CODE=$?
 else
     LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
       --workspace="$WORKSPACE" \
       --revision="$CURRENT_BRANCH" \
-      --profile smoke \
-      --config seqera.config \
+      --profile awsbatch \
       --params-file "$PARAMS_FILE" 2>&1)
+    LAUNCH_EXIT_CODE=$?
 fi
 
 echo "$LAUNCH_OUTPUT"
+
+# Check if launch failed
+if [ $LAUNCH_EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "========================================"
+    echo "ERROR: Workflow launch failed!"
+    echo "========================================"
+    echo ""
+    exit 1
+fi
 
 # Extract run ID from the output (format: "Workflow <RUN_ID> submitted")
 RUN_ID=$(echo "$LAUNCH_OUTPUT" | grep -oE '[0-9a-zA-Z]{14}' | head -1)

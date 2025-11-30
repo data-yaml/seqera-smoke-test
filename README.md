@@ -16,8 +16,9 @@ This repository contains a minimal Nextflow workflow designed to:
 If everything is setup:
 
 ```bash
-./test-local.sh
-./test-tw.sh  # prompts for S3 output bucket
+./test-local.sh        # Test locally with Docker
+./test-tw.sh           # Interactive mode - prompts for configuration
+./test-tw.sh --yes     # Automated mode - uses saved configuration
 ```
 
 Else see below.
@@ -76,7 +77,36 @@ Expected output:
 
 ### 2. Run on Seqera Platform
 
-#### Option A: Using Seqera CLI
+#### Option A: Using the Test Script (Recommended)
+
+**Interactive Mode:**
+
+```bash
+./test-tw.sh
+```
+
+On first run, the script will prompt you for:
+
+- Seqera Platform workspace
+- Compute environment
+- S3 output bucket
+
+These values are saved to `.env` and `work/params.yaml` for future runs.
+
+**Automated Mode (for CI/CD):**
+
+```bash
+./test-tw.sh --yes
+```
+
+Skips all prompts and uses saved configuration. Requires:
+
+- `TOWER_WORKSPACE_ID` in `.env`
+- `work/params.yaml` with S3 bucket configured
+
+Run without `--yes` first to set up these configurations.
+
+#### Option B: Using Seqera CLI Directly
 
 Create a params file (e.g., `params.yaml`):
 
@@ -88,23 +118,18 @@ Then launch:
 
 ```bash
 tw launch https://github.com/data-yaml/seqera-smoke-test \
-  --profile smoke \
-  --config seqera.config \
+  --workspace="Organization/Workspace" \
+  --compute-env="your-compute-env" \
+  --profile awsbatch \
   --params-file params.yaml
 ```
 
-Or use the interactive script which prompts for S3 bucket:
-
-```bash
-./test-tw.sh
-```
-
-#### Option B: Via Seqera Platform UI
+#### Option C: Via Seqera Platform UI
 
 1. Navigate to Launchpad
 2. Add new pipeline
 3. Pipeline URL: `https://github.com/data-yaml/seqera-smoke-test`
-4. Config profiles: `smoke`
+4. Config profiles: `awsbatch`
 5. Parameters:
    - `outdir`: `s3://your-bucket/smoke-test-results`
 
@@ -124,15 +149,21 @@ Check that:
 |-----------|---------|-------------|
 | `outdir` | `results` | Output directory (local or S3 path) |
 
-### Profile: `smoke`
+### Profiles
 
-Configured in [seqera.config](seqera.config):
+**`awsbatch`** - For cloud execution via Seqera Platform
+
+Configured in [nextflow.config](nextflow.config):
 
 - Executor: AWS Batch
-- CPU: 1
-- Memory: 512 MB
-- Time limit: 5 minutes
-- Region: us-east-1
+- Container: ubuntu:22.04
+
+**`docker`** - For local testing
+
+Configured in [nextflow.config](nextflow.config):
+
+- Docker enabled
+- Container: ubuntu:22.04
 
 ### SQS Integration
 
@@ -235,23 +266,22 @@ process test_computation {
 }
 ```
 
-### Change AWS Region
-
-Edit [seqera.config](seqera.config):
-
-```groovy
-aws.region = 'us-west-2'
-```
-
 ### Adjust Resources
 
-Edit [seqera.config](seqera.config):
+Edit [nextflow.config](nextflow.config) within the `awsbatch` profile:
 
 ```groovy
-process.cpus   = 2
-process.memory = '1 GB'
-process.time   = '10 min'
+awsbatch {
+    process {
+        executor = 'awsbatch'
+        container = 'ubuntu:22.04'
+        cpus = 2
+        memory = '1 GB'
+    }
+}
 ```
+
+Note: AWS region is determined by your compute environment in Seqera Platform.
 
 ## License
 
