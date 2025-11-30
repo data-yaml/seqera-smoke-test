@@ -418,19 +418,26 @@ check_git_status() {
     # Check for unpushed commits
     local unpushed=$(git log --oneline "origin/$branch..HEAD" 2>/dev/null | wc -l | tr -d ' ')
     if [ "$unpushed" -gt 0 ]; then
-        echo "ERROR: You have $unpushed unpushed commit(s)"
+        echo "Found $unpushed unpushed commit(s)"
         echo ""
         git log --oneline "origin/$branch..HEAD"
         echo ""
-        echo "The workflow will use the version from GitHub, which does not include"
-        echo "your local commits."
-        echo ""
-        echo "Push your commits first:"
-        echo "  git push origin $branch"
-        echo ""
-        exit 1
-    fi
+        echo "Pushing to origin/$branch..."
 
-    echo "✓ Git status clean (branch: $branch, synced with origin)"
-    echo ""
+        if git push origin "$branch"; then
+            echo ""
+            echo "✓ Successfully pushed $unpushed commit(s) to origin/$branch"
+            echo ""
+        else
+            echo ""
+            echo "ERROR: Failed to push commits to origin/$branch"
+            echo ""
+            echo "Please resolve the issue and try again."
+            echo ""
+            exit 1
+        fi
+    else
+        echo "✓ Git status clean (branch: $branch, synced with origin)"
+        echo ""
+    fi
 }
