@@ -31,10 +31,10 @@ if [ -d "results" ]; then
 fi
 
 # Run the workflow
-echo "Running workflow locally..."
+echo "Running workflow locally with Docker..."
 echo ""
 
-nextflow run main.nf --outdir results
+nextflow run main.nf -profile docker --outdir results
 
 echo ""
 echo "========================================"
