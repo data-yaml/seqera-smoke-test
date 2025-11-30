@@ -78,11 +78,25 @@ Expected output:
 
 #### Option A: Using Seqera CLI
 
+Create a params file (e.g., `params.yaml`):
+
+```yaml
+outdir: s3://your-bucket/smoke-test-results
+```
+
+Then launch:
+
 ```bash
 tw launch https://github.com/data-yaml/seqera-smoke-test \
   --profile smoke \
   --config seqera.config \
-  --outdir s3://your-bucket/smoke-test-results
+  --params-file params.yaml
+```
+
+Or use the interactive script which prompts for S3 bucket:
+
+```bash
+./test-tw.sh
 ```
 
 #### Option B: Via Seqera Platform UI
