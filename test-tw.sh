@@ -158,6 +158,77 @@ fi
 
 echo ""
 
+# Check for compute environments in the workspace
+echo "Checking compute environments..."
+COMPUTE_ENVS_OUTPUT=$(tw compute-envs list --workspace="$WORKSPACE" 2>&1)
+
+if echo "$COMPUTE_ENVS_OUTPUT" | grep -q "No compute environments found"; then
+    echo "⚠ No compute environments found in workspace: $WORKSPACE"
+    echo ""
+    echo "You need to configure a compute environment before launching workflows."
+    echo "Visit Seqera Platform to add a compute environment, or use:"
+    echo "  tw compute-envs add --help"
+    echo ""
+    exit 1
+fi
+
+# Display available compute environments
+echo "$COMPUTE_ENVS_OUTPUT"
+echo ""
+
+# Check if there's a saved compute environment
+if [ -f "$ENV_FILE" ] && grep -q "^TOWER_COMPUTE_ENV=" "$ENV_FILE"; then
+    SAVED_COMPUTE_ENV=$(grep "^TOWER_COMPUTE_ENV=" "$ENV_FILE" | cut -d'=' -f2-)
+    echo "Found saved compute environment: $SAVED_COMPUTE_ENV"
+    echo ""
+    read -p "Use this compute environment? (Y/n): " -n 1 -r
+    echo ""
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        COMPUTE_ENV="$SAVED_COMPUTE_ENV"
+        echo "Using compute environment: $COMPUTE_ENV"
+    else
+        # Prompt for new compute environment
+        echo "Enter compute environment name from the list above:"
+        read -r COMPUTE_ENV
+
+        if [ -z "$COMPUTE_ENV" ]; then
+            echo "ERROR: Compute environment is required."
+            exit 1
+        fi
+
+        # Update .env file with new compute environment
+        grep -v "^TOWER_COMPUTE_ENV=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
+        echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "${ENV_FILE}.tmp"
+        mv "${ENV_FILE}.tmp" "$ENV_FILE"
+        echo "✓ Compute environment saved to $ENV_FILE"
+    fi
+else
+    # No saved compute environment - prompt for it
+    echo "Enter compute environment name from the list above"
+    echo "(or press Enter to use primary/default):"
+    read -r COMPUTE_ENV
+
+    if [ -n "$COMPUTE_ENV" ]; then
+        # Save compute environment to .env
+        echo ""
+        echo "Saving compute environment to $ENV_FILE for future use..."
+        if [ -f "$ENV_FILE" ]; then
+            grep -v "^TOWER_COMPUTE_ENV=" "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
+            echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "${ENV_FILE}.tmp"
+            mv "${ENV_FILE}.tmp" "$ENV_FILE"
+        else
+            echo "TOWER_COMPUTE_ENV=$COMPUTE_ENV" >> "$ENV_FILE"
+        fi
+        echo "✓ Compute environment saved"
+    else
+        echo "Using workspace default/primary compute environment"
+    fi
+fi
+
+echo ""
+
 # Create work directory if it doesn't exist
 mkdir -p work
 PARAMS_FILE="work/params.yaml"
@@ -198,10 +269,21 @@ if [[ ! "$S3_BUCKET" =~ ^s3:// ]]; then
     exit 1
 fi
 
+# Detect current git branch
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+if [ -z "$CURRENT_BRANCH" ]; then
+    CURRENT_BRANCH="main"
+    echo "⚠ Could not detect git branch, defaulting to: $CURRENT_BRANCH"
+else
+    echo "Detected git branch: $CURRENT_BRANCH"
+fi
+
 echo ""
 echo "Configuration:"
 echo "  Pipeline: https://github.com/data-yaml/seqera-smoke-test"
+echo "  Branch: $CURRENT_BRANCH"
 echo "  Profile: smoke"
+echo "  Compute Environment: ${COMPUTE_ENV:-default}"
 echo "  Output: $S3_BUCKET"
 echo ""
 
@@ -226,23 +308,52 @@ EOF
 echo "Parameters saved to: $PARAMS_FILE"
 echo ""
 
-# Launch the workflow
-tw launch https://github.com/data-yaml/seqera-smoke-test \
-  --workspace="$WORKSPACE" \
-  --profile smoke \
-  --config seqera.config \
-  --params-file "$PARAMS_FILE"
+# Launch the workflow with the detected branch and capture output
+if [ -n "$COMPUTE_ENV" ]; then
+    LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
+      --workspace="$WORKSPACE" \
+      --revision="$CURRENT_BRANCH" \
+      --compute-env="$COMPUTE_ENV" \
+      --profile smoke \
+      --config seqera.config \
+      --params-file "$PARAMS_FILE" 2>&1)
+else
+    LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
+      --workspace="$WORKSPACE" \
+      --revision="$CURRENT_BRANCH" \
+      --profile smoke \
+      --config seqera.config \
+      --params-file "$PARAMS_FILE" 2>&1)
+fi
+
+echo "$LAUNCH_OUTPUT"
+
+# Extract run ID from the output (format: "Workflow <RUN_ID> submitted")
+RUN_ID=$(echo "$LAUNCH_OUTPUT" | grep -oE '[0-9a-zA-Z]{14}' | head -1)
 
 echo ""
 echo "========================================"
 echo "Workflow Submitted!"
 echo "========================================"
 echo ""
-echo "Next steps:"
-echo "1. Monitor workflow progress: tw runs list --workspace='$WORKSPACE'"
-echo "2. View workflow details: tw runs view <run-id> --workspace='$WORKSPACE'"
-echo "3. Check logs: tw runs logs <run-id> --workspace='$WORKSPACE'"
-echo "4. Verify S3 output: aws s3 ls $S3_BUCKET/"
+
+if [ -n "$RUN_ID" ]; then
+    echo "Run ID: $RUN_ID"
+    echo ""
+    echo "Next steps:"
+    echo "1. Monitor workflow progress: tw runs list --workspace='$WORKSPACE' | grep $RUN_ID"
+    echo "2. View workflow details: tw runs view -i $RUN_ID --workspace='$WORKSPACE'"
+    echo "3. View workflow tasks: tw runs view -i $RUN_ID tasks --workspace='$WORKSPACE'"
+    echo "4. Verify S3 output: aws s3 ls $S3_BUCKET/"
+else
+    echo "⚠ Could not extract run ID from output."
+    echo ""
+    echo "Next steps:"
+    echo "1. View workflow details: tw runs view -i <run-id> --workspace='$WORKSPACE'"
+    echo "2. View workflow tasks: tw runs view -i <run-id> tasks --workspace='$WORKSPACE'"
+    echo "3. Verify S3 output: aws s3 ls $S3_BUCKET/"
+fi
+
 echo ""
 echo "Note: Workspace saved to $ENV_FILE for next run."
 echo "      Remember to use --workspace='$WORKSPACE' with tw commands."
