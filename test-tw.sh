@@ -36,29 +36,20 @@ echo ""
 
 # Check for workspaces
 echo "Checking workspaces..."
-WORKSPACES=$(tw workspaces list 2>/dev/null)
-if [ $? -ne 0 ] || [ -z "$WORKSPACES" ]; then
+tw workspaces list
+if [ $? -ne 0 ]; then
     echo "ERROR: Unable to list workspaces."
     exit 1
 fi
 
-# Count workspaces (excluding header)
-WORKSPACE_COUNT=$(echo "$WORKSPACES" | tail -n +3 | wc -l | tr -d ' ')
+echo ""
+echo "Enter workspace in Organization/Workspace format"
+echo "(e.g., Quilt_Data/hackathon_2023):"
+read -r WORKSPACE
 
-if [ "$WORKSPACE_COUNT" -eq 0 ]; then
-    echo "ERROR: No workspaces found."
+if [ -z "$WORKSPACE" ]; then
+    echo "ERROR: Workspace is required."
     exit 1
-elif [ "$WORKSPACE_COUNT" -eq 1 ]; then
-    # Only one workspace - use it automatically
-    WORKSPACE=$(echo "$WORKSPACES" | tail -n +3 | awk '{print $3 "/" $2}')
-    echo "✓ Using workspace: $WORKSPACE"
-else
-    # Multiple workspaces - show list and ask
-    echo "Available workspaces:"
-    echo "$WORKSPACES" | tail -n +3 | awk '{print "  - " $3 "/" $2}'
-    echo ""
-    echo "Enter workspace (Organization/Workspace format):"
-    read -r WORKSPACE
 fi
 echo ""
 
