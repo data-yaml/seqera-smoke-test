@@ -352,11 +352,30 @@ else
 fi
 
 echo ""
+
+# Get compute environment details if a specific compute env is set
+if [ -n "$COMPUTE_ENV" ]; then
+    echo "Fetching compute environment details..."
+    COMPUTE_ENV_DETAILS=$(tw compute-envs view --name="$COMPUTE_ENV" --workspace="$WORKSPACE" 2>/dev/null)
+
+    # Extract region and workDir from the JSON configuration
+    CE_REGION=$(echo "$COMPUTE_ENV_DETAILS" | grep -o '"region" : "[^"]*"' | cut -d'"' -f4)
+    CE_WORKDIR=$(echo "$COMPUTE_ENV_DETAILS" | grep -o '"workDir" : "[^"]*"' | cut -d'"' -f4)
+
+    echo ""
+fi
+
 echo "Configuration:"
 echo "  Pipeline: https://github.com/data-yaml/seqera-smoke-test"
 echo "  Branch: $CURRENT_BRANCH"
 echo "  Profile: awsbatch"
 echo "  Compute Environment: ${COMPUTE_ENV:-default}"
+if [ -n "$CE_REGION" ]; then
+    echo "  Region: $CE_REGION"
+fi
+if [ -n "$CE_WORKDIR" ]; then
+    echo "  Work Directory: $CE_WORKDIR"
+fi
 echo "  Output: $S3_BUCKET"
 echo ""
 
