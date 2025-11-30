@@ -105,15 +105,15 @@ if [ -n "$COMPUTE_ENV" ]; then
       --workspace="$WORKSPACE" \
       --revision="$CURRENT_BRANCH" \
       --compute-env="$COMPUTE_ENV" \
-      --profile awsbatch \
-      --params-file "$PARAMS_FILE" 2>&1)
+      --profile=awsbatch \
+      --params-file="$PARAMS_FILE" 2>&1)
     LAUNCH_EXIT_CODE=$?
 else
     LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
       --workspace="$WORKSPACE" \
       --revision="$CURRENT_BRANCH" \
-      --profile awsbatch \
-      --params-file "$PARAMS_FILE" 2>&1)
+      --profile=awsbatch \
+      --params-file="$PARAMS_FILE" 2>&1)
     LAUNCH_EXIT_CODE=$?
 fi
 
