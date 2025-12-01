@@ -40,4 +40,6 @@ env/
 # Environment files
 .env
 .env.local
-/test-results
+
+# Test results
+test-results/
