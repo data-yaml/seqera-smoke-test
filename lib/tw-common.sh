@@ -349,9 +349,7 @@ detect_git_branch() {
     local branch=$(git branch --show-current 2>/dev/null)
     if [ -z "$branch" ]; then
         branch="main"
-        echo "⚠ Could not detect git branch, defaulting to: $branch"
-    else
-        echo "Detected git branch: $branch"
+        echo "⚠ Could not detect git branch, defaulting to: $branch" >&2
     fi
     echo "$branch"
 }
