@@ -110,11 +110,35 @@ workflow.onComplete {
 
     // Step 3: Send SQS message
     println('Sending SQS message...')
+
+    // Construct Quilt packaging message body according to:
+    // https://docs.quilt.bio/quilt-platform-catalog-user/packaging
+    // Only source_prefix is required; registry and package_name are inferred from it
+    Map<String, Object> messageBody = [
+        source_prefix: "${outdir}/",  // trailing '/' for folder; registry & package inferred from this
+        metadata: [
+            nextflow_version: workflow.nextflow.version.toString(),
+            workflow_name: workflow.scriptName,
+            workflow_id: workflow.runName,
+            session_id: workflow.sessionId,
+            container: workflow.container ?: 'none',
+            success: workflow.success,
+            timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+        ],
+        commit_message: "Seqera Platform smoke test completed at ${new Date().format("yyyy-MM-dd HH:mm:ss")}"
+    ]
+
+    String messageJson = groovy.json.JsonOutput.toJson(messageBody)
+
+    println('Message body:')
+    println(messageJson)
+    println(emptyLine)
+
     List<String> cmd = [
         awsCmd, 'sqs', 'send-message',
         '--queue-url', queueUrl,
         '--region', region,
-        '--message-body', outdir
+        '--message-body', messageJson
     ]
     Process p = cmd.execute()
     p.waitFor()
@@ -169,6 +193,9 @@ workflow.onComplete {
         println("Queue URL: ${queueUrl}")
         println("Region: ${region}")
         println("Output folder: ${outdir}")
+        println(emptyLine)
+        println('Message Content (Quilt Packaging Request):')
+        println(messageJson)
         println(emptyLine)
         println('AWS SQS Response:')
         println(response)
