@@ -319,21 +319,42 @@ get_or_prompt_s3_bucket() {
             echo "Reusing: $S3_BUCKET (--yes flag)"
             echo ""
         else
-            read -p "Reuse this S3 bucket? (Y/n): " -n 1 -r
-            echo ""
-            echo ""
-
-            if [[ $REPLY =~ ^[Nn]$ ]]; then
-                # User wants to use new bucket - prompt for it
-                echo "Enter S3 bucket path for workflow outputs"
-                echo "(e.g., s3://my-bucket/smoke-test-results):"
-                read -r S3_BUCKET
-            else
-                # Reuse existing bucket
-                S3_BUCKET="$EXISTING_OUTDIR"
-                echo "Reusing: $S3_BUCKET"
+            # Keep prompting until valid Y/n response
+            while true; do
+                read -p "Reuse this S3 bucket? (Y/n): " -n 1 -r
                 echo ""
-            fi
+                echo ""
+
+                if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+                    # Reuse existing bucket
+                    S3_BUCKET="$EXISTING_OUTDIR"
+                    echo "Reusing: $S3_BUCKET"
+                    echo ""
+                    break
+                elif [[ $REPLY =~ ^[Nn]$ ]]; then
+                    # User wants to use new bucket - prompt for it with validation loop
+                    while true; do
+                        echo "Enter S3 bucket path for workflow outputs"
+                        echo "(e.g., s3://my-bucket/smoke-test-results):"
+                        read -r S3_BUCKET
+
+                        # Validate S3 bucket format
+                        if [[ "$S3_BUCKET" =~ ^s3:// ]]; then
+                            echo ""
+                            break
+                        else
+                            echo ""
+                            echo "ERROR: S3 bucket path must start with 's3://'"
+                            echo "Example: s3://my-bucket/smoke-test-results"
+                            echo ""
+                        fi
+                    done
+                    break
+                else
+                    echo "Please enter 'Y' or 'n'"
+                    echo ""
+                fi
+            done
         fi
     else
         # No existing params file
@@ -343,18 +364,23 @@ get_or_prompt_s3_bucket() {
             exit 1
         fi
 
-        # Prompt for S3 bucket
-        echo "Enter S3 bucket path for workflow outputs"
-        echo "(e.g., s3://my-bucket/smoke-test-results):"
-        read -r S3_BUCKET
-    fi
+        # Prompt for S3 bucket with validation loop
+        while true; do
+            echo "Enter S3 bucket path for workflow outputs"
+            echo "(e.g., s3://my-bucket/smoke-test-results):"
+            read -r S3_BUCKET
 
-    # Validate S3 bucket format
-    if [[ ! "$S3_BUCKET" =~ ^s3:// ]]; then
-        echo ""
-        echo "ERROR: S3 bucket path must start with 's3://'"
-        echo "Example: s3://my-bucket/smoke-test-results"
-        exit 1
+            # Validate S3 bucket format
+            if [[ "$S3_BUCKET" =~ ^s3:// ]]; then
+                echo ""
+                break
+            else
+                echo ""
+                echo "ERROR: S3 bucket path must start with 's3://'"
+                echo "Example: s3://my-bucket/smoke-test-results"
+                echo ""
+            fi
+        done
     fi
 }
 
