@@ -42,6 +42,20 @@ check_tw_login() {
     echo ""
 }
 
+# Check all prerequisites in the correct order
+# This MUST be called first before any user prompts
+check_prerequisites() {
+    echo "Checking prerequisites..."
+    check_tw_cli
+    check_tw_login
+
+    # Detect current git branch and check git status FIRST (before prompting user)
+    CURRENT_BRANCH=$(detect_git_branch)
+    check_git_status
+
+    echo ""
+}
+
 # Check if AWS CLI is installed
 check_aws_cli() {
     if ! command -v aws &> /dev/null; then
@@ -305,21 +319,42 @@ get_or_prompt_s3_bucket() {
             echo "Reusing: $S3_BUCKET (--yes flag)"
             echo ""
         else
-            read -p "Reuse this S3 bucket? (Y/n): " -n 1 -r
-            echo ""
-            echo ""
-
-            if [[ $REPLY =~ ^[Nn]$ ]]; then
-                # User wants to use new bucket - prompt for it
-                echo "Enter S3 bucket path for workflow outputs"
-                echo "(e.g., s3://my-bucket/smoke-test-results):"
-                read -r S3_BUCKET
-            else
-                # Reuse existing bucket
-                S3_BUCKET="$EXISTING_OUTDIR"
-                echo "Reusing: $S3_BUCKET"
+            # Keep prompting until valid Y/n response
+            while true; do
+                read -p "Reuse this S3 bucket? (Y/n): " -n 1 -r
                 echo ""
-            fi
+                echo ""
+
+                if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+                    # Reuse existing bucket
+                    S3_BUCKET="$EXISTING_OUTDIR"
+                    echo "Reusing: $S3_BUCKET"
+                    echo ""
+                    break
+                elif [[ $REPLY =~ ^[Nn]$ ]]; then
+                    # User wants to use new bucket - prompt for it with validation loop
+                    while true; do
+                        echo "Enter S3 bucket path for workflow outputs"
+                        echo "(e.g., s3://my-bucket/smoke-test-results):"
+                        read -r S3_BUCKET
+
+                        # Validate S3 bucket format
+                        if [[ "$S3_BUCKET" =~ ^s3:// ]]; then
+                            echo ""
+                            break
+                        else
+                            echo ""
+                            echo "ERROR: S3 bucket path must start with 's3://'"
+                            echo "Example: s3://my-bucket/smoke-test-results"
+                            echo ""
+                        fi
+                    done
+                    break
+                else
+                    echo "Please enter 'Y' or 'n'"
+                    echo ""
+                fi
+            done
         fi
     else
         # No existing params file
@@ -329,18 +364,23 @@ get_or_prompt_s3_bucket() {
             exit 1
         fi
 
-        # Prompt for S3 bucket
-        echo "Enter S3 bucket path for workflow outputs"
-        echo "(e.g., s3://my-bucket/smoke-test-results):"
-        read -r S3_BUCKET
-    fi
+        # Prompt for S3 bucket with validation loop
+        while true; do
+            echo "Enter S3 bucket path for workflow outputs"
+            echo "(e.g., s3://my-bucket/smoke-test-results):"
+            read -r S3_BUCKET
 
-    # Validate S3 bucket format
-    if [[ ! "$S3_BUCKET" =~ ^s3:// ]]; then
-        echo ""
-        echo "ERROR: S3 bucket path must start with 's3://'"
-        echo "Example: s3://my-bucket/smoke-test-results"
-        exit 1
+            # Validate S3 bucket format
+            if [[ "$S3_BUCKET" =~ ^s3:// ]]; then
+                echo ""
+                break
+            else
+                echo ""
+                echo "ERROR: S3 bucket path must start with 's3://'"
+                echo "Example: s3://my-bucket/smoke-test-results"
+                echo ""
+            fi
+        done
     fi
 }
 
@@ -384,19 +424,7 @@ check_git_status() {
         return 0
     fi
 
-    # Check if branch exists on remote
-    if ! git rev-parse --verify "origin/$branch" > /dev/null 2>&1; then
-        echo "ERROR: Branch '$branch' does not exist on remote 'origin'"
-        echo ""
-        echo "The workflow will fail because Seqera Platform cannot access this branch."
-        echo ""
-        echo "Push the branch first:"
-        echo "  git push -u origin $branch"
-        echo ""
-        exit 1
-    fi
-
-    # Check for uncommitted changes
+    # Check for uncommitted changes FIRST (fail early)
     if ! git diff --quiet || ! git diff --cached --quiet; then
         echo "ERROR: You have uncommitted changes"
         echo ""
@@ -409,6 +437,18 @@ check_git_status() {
         echo "  git add ."
         echo "  git commit -m 'Your commit message'"
         echo "  git push origin $branch"
+        echo ""
+        exit 1
+    fi
+
+    # Check if branch exists on remote
+    if ! git rev-parse --verify "origin/$branch" > /dev/null 2>&1; then
+        echo "ERROR: Branch '$branch' does not exist on remote 'origin'"
+        echo ""
+        echo "The workflow will fail because Seqera Platform cannot access this branch."
+        echo ""
+        echo "Push the branch first:"
+        echo "  git push -u origin $branch"
         echo ""
         exit 1
     fi

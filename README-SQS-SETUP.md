@@ -43,12 +43,39 @@ Use the `setup-sqs.py` script to automatically discover your Quilt catalog confi
 
 3. **Finds TowerForge Roles**
    - Lists IAM roles in the account
-   - Filters for TowerForge Fargate roles (used by compute environments)
+   - Filters for TowerForge roles (Fargate or EC2 Instance roles used by compute environments)
 
 4. **Updates Permissions**
    - Checks if roles already have `sqs:SendMessage` permission
    - Adds permission to `nextflow-policy` inline policy if missing
    - Displays summary of all changes
+
+5. **Writes Configuration**
+   - Saves queue URL, ARN, and stack info to `config.toml`
+   - Used by `check-sqs.sh` to verify the setup
+
+### Verify Setup
+
+After running setup, verify the configuration:
+
+```bash
+# Check configuration and verify AWS access
+./check-sqs.sh
+
+# With specific AWS profile
+./check-sqs.sh --profile sales
+
+# Show detailed information
+./check-sqs.sh --profile sales --verbose
+```
+
+The verification script will:
+
+1. Read the configuration from `config.toml`
+2. Verify SQS queue is accessible
+3. Check CloudFormation stack exists
+4. Verify IAM role permissions
+5. Send a test message to confirm write access
 
 ## Manual Testing
 
@@ -60,6 +87,7 @@ After setup, test the SQS integration with:
 ```
 
 This will:
+
 1. Launch a simple Nextflow workflow via Seqera Platform
 2. Wait for completion
 3. Verify an SQS message was sent to the PackagerQueue
@@ -119,6 +147,7 @@ workflow.onComplete {
 If you see `AccessDenied` errors when running the workflow:
 
 1. Check that the correct role was updated:
+
    ```bash
    # Find the role used by your compute environment
    tw compute-envs view --name=<compute-env> --workspace=<workspace>
@@ -126,13 +155,21 @@ If you see `AccessDenied` errors when running the workflow:
    ```
 
 2. Verify the role has the permission:
+
    ```bash
+   # For Fargate compute environments
    AWS_PROFILE=sales aws iam get-role-policy \
      --role-name TowerForge-XXX-FargateRole \
+     --policy-name nextflow-policy | grep -A 5 SQS
+
+   # For EC2 compute environments
+   AWS_PROFILE=sales aws iam get-role-policy \
+     --role-name TowerForge-XXX-InstanceRole \
      --policy-name nextflow-policy | grep -A 5 SQS
    ```
 
 3. Re-run setup script to add permission:
+
    ```bash
    ./setup-sqs.py --profile sales --catalog https://demo.quiltdata.com --yes
    ```
@@ -159,14 +196,17 @@ String region = 'us-east-1'
 
 ## Files
 
-- `setup-sqs.py` - Automated setup script for SQS permissions
+- `setup-sqs.py` - Automated setup script for SQS permissions (generates config.toml)
+- `check-sqs.sh` - Verification script that reads config.toml and validates setup
 - `test-sqs.sh` - Test script that launches workflow and verifies SQS integration
 - `main-sqs.nf` - Example Nextflow workflow with SQS integration
+- `config.toml` - Generated configuration file (created by setup-sqs.py)
+- `config.toml.example` - Example configuration file with placeholder values
 - `lib/tw-common.sh` - Common functions for Seqera Platform CLI operations
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │ Seqera Platform                         │
 │                                         │
@@ -174,10 +214,12 @@ String region = 'us-east-1'
 │  │ Compute Environment (AWS Batch)   │  │
 │  │                                   │  │
 │  │  ┌─────────────────────────────┐  │  │
-│  │  │ Nextflow Head Job (Fargate) │  │  │
+│  │  │ Nextflow Head Job           │  │  │
+│  │  │ (Fargate or EC2)            │  │  │
 │  │  │                             │  │  │
 │  │  │ Role: TowerForge-XXX-       │  │  │
-│  │  │       FargateRole           │  │  │
+│  │  │       FargateRole or        │  │  │
+│  │  │       InstanceRole          │  │  │
 │  │  │                             │  │  │
 │  │  │ Permissions:                │  │  │
 │  │  │  - batch:*                  │  │  │
