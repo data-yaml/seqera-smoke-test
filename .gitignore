@@ -43,3 +43,6 @@ env/
 
 # Test results
 test-results/
+
+# Generated configuration
+config.toml
