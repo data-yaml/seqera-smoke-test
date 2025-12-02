@@ -50,6 +50,33 @@ Use the `setup-sqs.py` script to automatically discover your Quilt catalog confi
    - Adds permission to `nextflow-policy` inline policy if missing
    - Displays summary of all changes
 
+5. **Writes Configuration**
+   - Saves queue URL, ARN, and stack info to `config.toml`
+   - Used by `check-sqs.sh` to verify the setup
+
+### Verify Setup
+
+After running setup, verify the configuration:
+
+```bash
+# Check configuration and verify AWS access
+./check-sqs.sh
+
+# With specific AWS profile
+./check-sqs.sh --profile sales
+
+# Show detailed information
+./check-sqs.sh --profile sales --verbose
+```
+
+The verification script will:
+
+1. Read the configuration from `config.toml`
+2. Verify SQS queue is accessible
+3. Check CloudFormation stack exists
+4. Verify IAM role permissions
+5. Send a test message to confirm write access
+
 ## Manual Testing
 
 After setup, test the SQS integration with:
@@ -159,9 +186,12 @@ String region = 'us-east-1'
 
 ## Files
 
-- `setup-sqs.py` - Automated setup script for SQS permissions
+- `setup-sqs.py` - Automated setup script for SQS permissions (generates config.toml)
+- `check-sqs.sh` - Verification script that reads config.toml and validates setup
 - `test-sqs.sh` - Test script that launches workflow and verifies SQS integration
 - `main-sqs.nf` - Example Nextflow workflow with SQS integration
+- `config.toml` - Generated configuration file (created by setup-sqs.py)
+- `config.toml.example` - Example configuration file with placeholder values
 - `lib/tw-common.sh` - Common functions for Seqera Platform CLI operations
 
 ## Architecture
