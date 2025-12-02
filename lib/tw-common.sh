@@ -42,6 +42,20 @@ check_tw_login() {
     echo ""
 }
 
+# Check all prerequisites in the correct order
+# This MUST be called first before any user prompts
+check_prerequisites() {
+    echo "Checking prerequisites..."
+    check_tw_cli
+    check_tw_login
+
+    # Detect current git branch and check git status FIRST (before prompting user)
+    CURRENT_BRANCH=$(detect_git_branch)
+    check_git_status
+
+    echo ""
+}
+
 # Check if AWS CLI is installed
 check_aws_cli() {
     if ! command -v aws &> /dev/null; then
@@ -384,19 +398,7 @@ check_git_status() {
         return 0
     fi
 
-    # Check if branch exists on remote
-    if ! git rev-parse --verify "origin/$branch" > /dev/null 2>&1; then
-        echo "ERROR: Branch '$branch' does not exist on remote 'origin'"
-        echo ""
-        echo "The workflow will fail because Seqera Platform cannot access this branch."
-        echo ""
-        echo "Push the branch first:"
-        echo "  git push -u origin $branch"
-        echo ""
-        exit 1
-    fi
-
-    # Check for uncommitted changes
+    # Check for uncommitted changes FIRST (fail early)
     if ! git diff --quiet || ! git diff --cached --quiet; then
         echo "ERROR: You have uncommitted changes"
         echo ""
@@ -409,6 +411,18 @@ check_git_status() {
         echo "  git add ."
         echo "  git commit -m 'Your commit message'"
         echo "  git push origin $branch"
+        echo ""
+        exit 1
+    fi
+
+    # Check if branch exists on remote
+    if ! git rev-parse --verify "origin/$branch" > /dev/null 2>&1; then
+        echo "ERROR: Branch '$branch' does not exist on remote 'origin'"
+        echo ""
+        echo "The workflow will fail because Seqera Platform cannot access this branch."
+        echo ""
+        echo "Push the branch first:"
+        echo "  git push -u origin $branch"
         echo ""
         exit 1
     fi

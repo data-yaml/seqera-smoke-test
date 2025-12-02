@@ -31,10 +31,8 @@ print_header "Seqera Platform Smoke Test - SQS Integration"
 # Load environment variables from .env if it exists
 load_env_file
 
-# Check prerequisites
-echo "Checking prerequisites..."
-check_tw_cli
-check_tw_login
+# Check prerequisites (CLI, login, git status) - MUST be first
+check_prerequisites
 
 # NOTE: AWS CLI validation intentionally skipped!
 # SQS messages are sent from within the Seqera Platform compute environment,
@@ -43,8 +41,6 @@ check_tw_login
 # 2. Permissions: sqs:SendMessage on the target queue
 #
 # Local AWS credentials are NOT used and NOT required for this test.
-
-echo ""
 
 # Check and prompt for TOWER_ACCESS_TOKEN
 get_or_prompt_token
@@ -58,12 +54,6 @@ get_or_prompt_compute_env
 # Get or prompt for S3 bucket
 PARAMS_FILE="work/params.yaml"
 get_or_prompt_s3_bucket "$PARAMS_FILE"
-
-# Detect current git branch
-CURRENT_BRANCH=$(detect_git_branch)
-
-# Check git status (uncommitted/unpushed changes)
-check_git_status
 
 echo ""
 
