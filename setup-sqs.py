@@ -278,7 +278,7 @@ def find_tower_forge_roles(region: str, profile: Optional[str] = None) -> List[D
         tower_roles = []
         for role in roles.get('Roles', []):
             role_name = role.get('RoleName', '')
-            if 'TowerForge' in role_name and 'FargateRole' in role_name:
+            if 'TowerForge' in role_name and ('FargateRole' in role_name or 'InstanceRole' in role_name):
                 tower_roles.append({
                     'role_name': role_name,
                     'role_arn': role.get('Arn', ''),
