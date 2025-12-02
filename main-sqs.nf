@@ -60,6 +60,14 @@ workflow.onComplete {
     println("Workflow status: ${workflow.success ? 'SUCCESS' : 'FAILED'}")
     println(emptyLine)
 
+    // Check if workflow succeeded - only send SQS notification for successful runs
+    if (!workflow.success) {
+        println('Workflow failed - skipping SQS notification')
+        println("Error report: ${workflow.errorReport}")
+        println(separator)
+        return
+    }
+
     // Step 1: Check if AWS CLI is available
     println('Checking AWS CLI availability...')
     Process awsCheck = [awsCmd, '--version'].execute()
