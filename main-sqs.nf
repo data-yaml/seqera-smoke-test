@@ -155,23 +155,82 @@ workflow.onComplete {
     }
     println(emptyLine)
 
-    // Step 4: Send SQS message
+    // Step 4: Extract WRROC metadata
+    Map<String, Object> wrrocMetadata = [:]
+    if (wrrocFound) {
+        println('Extracting WRROC metadata...')
+        try {
+            def wrrocJson = new groovy.json.JsonSlurper().parse(wrrocFile)
+            def graph = wrrocJson['@graph']
+
+            // Find the root dataset
+            def rootDataset = graph.find { it['@id'] == './' }
+            if (rootDataset) {
+                wrrocMetadata['wrroc_name'] = rootDataset.name
+                wrrocMetadata['wrroc_date_published'] = rootDataset.datePublished
+                wrrocMetadata['wrroc_license'] = rootDataset.license
+
+                // Find author details
+                def authorId = rootDataset.author?['@id']
+                if (authorId) {
+                    def author = graph.find { it['@id'] == authorId }
+                    if (author) {
+                        wrrocMetadata['wrroc_author_name'] = author.name
+                        wrrocMetadata['wrroc_author_orcid'] = authorId
+                    }
+                }
+            }
+
+            // Find the workflow run action
+            def workflowRun = graph.find { it['@type'] == 'CreateAction' && it.name?.startsWith('Nextflow workflow run') }
+            if (workflowRun) {
+                wrrocMetadata['wrroc_run_id'] = workflowRun['@id']?.replaceAll('^#', '')
+                wrrocMetadata['wrroc_start_time'] = workflowRun.startTime
+                wrrocMetadata['wrroc_end_time'] = workflowRun.endTime
+            }
+
+            // Find the main workflow file
+            def mainWorkflow = graph.find { it['@id'] == 'main-sqs.nf' }
+            if (mainWorkflow) {
+                wrrocMetadata['wrroc_runtime_platform'] = mainWorkflow.runtimePlatform
+                wrrocMetadata['wrroc_programming_language'] = mainWorkflow.programmingLanguage?['@id']
+            }
+
+            println("✓ Extracted ${wrrocMetadata.size()} WRROC metadata fields")
+            wrrocMetadata.each { key, value ->
+                println("  ${key}: ${value}")
+            }
+        } catch (Exception e) {
+            println("⚠ Warning: Failed to parse WRROC file: ${e.message}")
+            println('  Continuing without WRROC metadata')
+        }
+        println(emptyLine)
+    }
+
+    // Step 5: Send SQS message
     println('Sending SQS message...')
 
     // Construct Quilt packaging message body according to:
     // https://docs.quilt.bio/quilt-platform-catalog-user/packaging
     // Only source_prefix is required; registry and package_name are inferred from it
+    Map<String, Object> metadata = [
+        nextflow_version: workflow.nextflow.version.toString(),
+        workflow_name: workflow.scriptName,
+        workflow_id: workflow.runName,
+        session_id: workflow.sessionId,
+        container: workflow.container ?: 'none',
+        success: workflow.success,
+        timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+    ]
+
+    // Add WRROC metadata if available
+    if (wrrocMetadata) {
+        metadata.putAll(wrrocMetadata)
+    }
+
     Map<String, Object> messageBody = [
         source_prefix: "${outdir}/",  // trailing '/' for folder; registry & package inferred from this
-        metadata: [
-            nextflow_version: workflow.nextflow.version.toString(),
-            workflow_name: workflow.scriptName,
-            workflow_id: workflow.runName,
-            session_id: workflow.sessionId,
-            container: workflow.container ?: 'none',
-            success: workflow.success,
-            timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
-        ],
+        metadata: metadata,
         commit_message: "Seqera Platform smoke test completed at ${new Date().format("yyyy-MM-dd HH:mm:ss")}"
     ]
 
