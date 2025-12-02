@@ -116,7 +116,46 @@ workflow.onComplete {
     println("Identity: ${identity}")
     println(emptyLine)
 
-    // Step 3: Send SQS message
+    // Step 3: Wait for WRROC file (nf-prov output)
+    println('Waiting for WRROC file to be written by nf-prov plugin...')
+    String wrrocPath = "${outdir}/ro-crate-metadata.json"
+    File wrrocFile = new File(wrrocPath)
+
+    int maxWaitSeconds = 60
+    int checkIntervalMs = 500
+    int attempts = (maxWaitSeconds * 1000) / checkIntervalMs
+    boolean wrrocFound = false
+
+    for (int i = 0; i < attempts; i++) {
+        if (wrrocFile.exists() && wrrocFile.length() > 0) {
+            println("✓ WRROC file found: ${wrrocPath}")
+            println("  File size: ${wrrocFile.length()} bytes")
+            wrrocFound = true
+            break
+        }
+        Thread.sleep(checkIntervalMs)
+    }
+
+    if (!wrrocFound) {
+        println(emptyLine)
+        println(separator)
+        println('WARNING: WRROC File Not Found')
+        println(separator)
+        println("Expected path: ${wrrocPath}")
+        println("Waited: ${maxWaitSeconds} seconds")
+        println(emptyLine)
+        println('The nf-prov plugin should have created this file.')
+        println('Possible causes:')
+        println('  - nf-prov plugin may not have finished writing yet')
+        println('  - Plugin may have failed silently')
+        println('  - Configuration issue with nf-prov')
+        println(emptyLine)
+        println('Proceeding with SQS notification, but WRROC file may be missing from package.')
+        println(separator)
+    }
+    println(emptyLine)
+
+    // Step 4: Send SQS message
     println('Sending SQS message...')
 
     // Construct Quilt packaging message body according to:
