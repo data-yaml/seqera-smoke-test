@@ -180,16 +180,35 @@ def extract_wrroc_metadata(wrroc_path: str) -> Dict[str, Any]:
 def build_sqs_message(outdir: str, wrroc_metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Build SQS message body with workflow and WRROC metadata"""
 
-    # Extract Nextflow environment variables provided by Seqera Platform
+    # Extract Seqera Platform environment variables (TOWER_*)
     metadata = {
-        "nextflow_version": os.getenv("NXF_VER", "unknown"),
-        "workflow_name": os.getenv("NXF_WORKFLOW_NAME", "unknown"),
-        "workflow_id": os.getenv("NXF_WORKFLOW_ID", "unknown"),
-        "session_id": os.getenv("NXF_SESSION_ID", "unknown"),
-        "container": os.getenv("NXF_CONTAINER", "none"),
-        "success": True,  # Post-run script only runs on success
+        # Run identification
+        "tower_workflow_id": os.getenv("TOWER_WORKFLOW_ID", "unknown"),
+        "tower_run_name": os.getenv("TOWER_RUN_NAME", "unknown"),
+        "tower_project_id": os.getenv("TOWER_PROJECT_ID"),
+        "tower_workspace_id": os.getenv("TOWER_WORKSPACE_ID"),
+        "tower_user_id": os.getenv("TOWER_USER_ID"),
+        # Status and outcome
+        "tower_workflow_status": os.getenv("TOWER_WORKFLOW_STATUS", "SUCCEEDED"),
+        "tower_workflow_start": os.getenv("TOWER_WORKFLOW_START"),
+        "tower_workflow_complete": os.getenv("TOWER_WORKFLOW_COMPLETE"),
+        # Storage
+        "tower_workdir": os.getenv("TOWER_WORKDIR"),
+        "tower_outdir": os.getenv("TOWER_OUTDIR"),
+        # Pipeline metadata
+        "tower_pipeline": os.getenv("TOWER_PIPELINE"),
+        "tower_pipeline_revision": os.getenv("TOWER_PIPELINE_REVISION"),
+        "tower_nextflow_version": os.getenv("TOWER_NEXTFLOW_VERSION"),
+        "tower_executor": os.getenv("TOWER_EXECUTOR"),
+        # Legacy Nextflow variables (if available)
+        "nextflow_version": os.getenv("NXF_VER"),
+        "workflow_name": os.getenv("NXF_WORKFLOW_NAME"),
+        "session_id": os.getenv("NXF_SESSION_ID"),
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+    # Remove None values
+    metadata = {k: v for k, v in metadata.items() if v is not None}
 
     # Merge WRROC metadata
     metadata.update(wrroc_metadata)
@@ -267,7 +286,7 @@ def main():
 
     # Validate outdir
     if not args.outdir:
-        print("ERROR: Output directory not set (NXF_PARAMS_outdir)")
+        print("ERROR: Output directory not set (TOWER_OUTDIR)")
         print("This script must be run as a Seqera Platform post-run script")
         sys.exit(1)
 
