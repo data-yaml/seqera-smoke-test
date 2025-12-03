@@ -110,57 +110,13 @@ Run without `--yes` first to set up these configurations.
 
 ### 3. Run with SQS Integration
 
-The SQS integration test script adds validation and verification of SQS message delivery.
+For SQS integration setup and testing, see [README-SQS.md](README-SQS.md).
 
-#### Prerequisites for SQS Integration
-
-In addition to the base prerequisites, you'll need:
-
-- **AWS CLI** configured with credentials
-- **IAM permissions** for the SQS queue:
-  - `sqs:GetQueueAttributes`
-  - `sqs:SendMessage`
-  - `sqs:ReceiveMessage`
-
-#### Interactive Mode
-
-```bash
-./test-sqs.sh
-```
-
-This script will:
-
-1. Validate SQS permissions before launching the workflow
-2. Launch the workflow using `main-sqs.nf` (which includes the SQS hook)
-3. Wait for workflow completion (polls every 30 seconds, max 10 minutes)
-4. Verify that the SQS message was delivered
-
-#### Automated Mode
+Quick test:
 
 ```bash
 ./test-sqs.sh --yes
 ```
-
-Uses saved configuration (requires same setup as `test-tw.sh --yes`).
-
-#### What's Different
-
-The SQS integration test differs from the basic test:
-
-- Uses `main-sqs.nf` instead of `main.nf` (includes `workflow.onComplete` SQS hook)
-- Validates SQS permissions upfront
-- Waits for workflow completion
-- Verifies message delivery to SQS queue
-- Reports success/failure of SQS integration
-
-#### Configuration
-
-SQS Queue URL: `https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA`
-
-To modify the queue URL, edit both:
-
-- [test-sqs.sh](test-sqs.sh) (line 11: `SQS_QUEUE_URL`)
-- [main-sqs.nf](main-sqs.nf) (line 41: `queueUrl`)
 
 ### 4. Alternative Launch Methods
 
@@ -223,19 +179,9 @@ Configured in [nextflow.config](nextflow.config):
 - Docker enabled
 - Container: ubuntu:22.04
 
-### SQS Integration
+### SQS Configuration
 
-The workflow sends a completion message to SQS (configured in [nextflow.config](nextflow.config)).
-
-**Current configuration:**
-
-- Queue URL: `https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA`
-- Message body: Output directory path
-
-To disable or modify:
-
-1. Edit [nextflow.config](nextflow.config)
-2. Update `queueUrl` or comment out the `workflow.onComplete` block
+For detailed SQS setup and configuration, see [README-SQS.md](README-SQS.md).
 
 ## Files
 
@@ -270,11 +216,9 @@ To disable or modify:
 - Check Batch execution role has S3 write permissions
 - Review CloudWatch logs for the Batch job
 
-**SQS message not delivered:**
+**SQS issues:**
 
-- Verify queue URL is correct
-- Check IAM permissions for SQS SendMessage
-- Review workflow completion logs
+- See [README-SQS.md](README-SQS.md) for troubleshooting
 
 ### Debug Commands
 
