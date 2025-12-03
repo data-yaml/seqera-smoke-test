@@ -2,6 +2,9 @@
 """
 Post-run script for Seqera Platform - sends SQS message with workflow metadata
 Downloads and executes from GitHub to bypass Seqera Platform's 1024-byte post-run script limit
+
+This version fetches comprehensive workflow details from Seqera Platform API including
+resolved parameters and configuration.
 """
 
 import argparse
@@ -12,12 +15,154 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 
 
 def print_header(msg: str):
     """Print a formatted header"""
     sep = "=" * 60
     print(f"\n{sep}\n{msg}\n{sep}\n")
+
+
+def fetch_workflow_details() -> Optional[Dict[str, Any]]:
+    """
+    Fetch workflow details from Seqera Platform API using TOWER_* environment variables
+
+    Returns comprehensive workflow information including:
+    - Resolved parameters
+    - Configuration
+    - Launch details
+    - Status and metadata
+    """
+    print_header("Fetching Workflow Details from Seqera Platform API")
+
+    # Get required environment variables
+    access_token = os.getenv("TOWER_ACCESS_TOKEN")
+    workflow_id = os.getenv("TOWER_WORKFLOW_ID")
+    workspace_id = os.getenv("TOWER_WORKSPACE_ID")
+
+    # Check for required variables
+    if not access_token:
+        print("⚠ Warning: TOWER_ACCESS_TOKEN not set, skipping API fetch")
+        return None
+    if not workflow_id:
+        print("⚠ Warning: TOWER_WORKFLOW_ID not set, skipping API fetch")
+        return None
+
+    # Determine API endpoint (default to cloud.seqera.io)
+    api_base = os.getenv("TOWER_API_ENDPOINT", "https://api.cloud.seqera.io")
+
+    # Build API URL
+    if workspace_id:
+        url = f"{api_base}/workflow/{workflow_id}?workspaceId={workspace_id}"
+    else:
+        url = f"{api_base}/workflow/{workflow_id}"
+
+    print(f"API URL: {url}")
+    print(f"Workflow ID: {workflow_id}")
+    if workspace_id:
+        print(f"Workspace ID: {workspace_id}")
+
+    try:
+        # Make API request
+        request = Request(url)
+        request.add_header("Authorization", f"Bearer {access_token}")
+        request.add_header("Accept", "application/json")
+
+        with urlopen(request, timeout=30) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                workflow = data.get("workflow", {})
+
+                print(f"✓ Successfully fetched workflow details")
+                print(f"  Workflow: {workflow.get('runName', 'N/A')}")
+                print(f"  Status: {workflow.get('status', 'N/A')}")
+                print(f"  Project: {workflow.get('projectName', 'N/A')}")
+
+                return workflow
+            else:
+                print(f"⚠ Warning: API returned status {response.status}")
+                return None
+
+    except HTTPError as e:
+        print(f"⚠ Warning: HTTP error fetching workflow: {e.code} - {e.reason}")
+        if e.code == 401:
+            print("  Token may be expired or invalid")
+        return None
+    except URLError as e:
+        print(f"⚠ Warning: Network error fetching workflow: {e.reason}")
+        return None
+    except Exception as e:
+        print(f"⚠ Warning: Unexpected error fetching workflow: {e}")
+        return None
+
+
+def extract_api_metadata(workflow_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Extract relevant metadata from Seqera Platform API workflow response
+
+    Extracts:
+    - Resolved parameters (params)
+    - Configuration values
+    - Launch details
+    - Compute environment info
+    """
+    if not workflow_data:
+        return {}
+
+    print("\nExtracting metadata from API response...")
+
+    metadata = {}
+
+    # Basic workflow info
+    metadata["api_run_name"] = workflow_data.get("runName")
+    metadata["api_project_name"] = workflow_data.get("projectName")
+    metadata["api_status"] = workflow_data.get("status")
+    metadata["api_session_id"] = workflow_data.get("sessionId")
+
+    # Resolved parameters (this is what you're looking for!)
+    params = workflow_data.get("params")
+    if params:
+        metadata["api_params"] = params
+        print(f"✓ Found resolved parameters:")
+        print(f"  {json.dumps(params, indent=2)}")
+
+    # Configuration
+    config = workflow_data.get("configText")
+    if config:
+        metadata["api_config_text"] = config
+        print(f"✓ Found configuration text ({len(config)} chars)")
+
+    # Launch details
+    launch = workflow_data.get("launch")
+    if launch:
+        metadata["api_launch_id"] = launch.get("id")
+        metadata["api_launch_pipeline"] = launch.get("pipeline")
+        metadata["api_launch_revision"] = launch.get("revision")
+        metadata["api_launch_config_profiles"] = launch.get("configProfiles")
+
+    # Compute environment
+    metadata["api_compute_env_id"] = workflow_data.get("computeEnvId")
+    metadata["api_compute_env_name"] = workflow_data.get("computeEnv", {}).get("name")
+
+    # Work directory
+    metadata["api_workdir"] = workflow_data.get("workDir")
+
+    # Execution details
+    metadata["api_start"] = workflow_data.get("start")
+    metadata["api_complete"] = workflow_data.get("complete")
+    metadata["api_duration"] = workflow_data.get("duration")
+
+    # Container
+    metadata["api_container"] = workflow_data.get("container")
+
+    # Remove None values
+    metadata = {k: v for k, v in metadata.items() if v is not None}
+
+    print(f"\n✓ Extracted {len(metadata)} fields from API response")
+
+    return metadata
 
 
 def check_aws_cli() -> bool:
@@ -177,8 +322,8 @@ def extract_wrroc_metadata(wrroc_path: str) -> Dict[str, Any]:
             Path(temp_file).unlink()
 
 
-def build_sqs_message(outdir: str, wrroc_metadata: Dict[str, Any]) -> Dict[str, Any]:
-    """Build SQS message body with workflow and WRROC metadata"""
+def build_sqs_message(outdir: str, wrroc_metadata: Dict[str, Any], api_metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Build SQS message body with workflow, WRROC, and API metadata"""
 
     # Extract Seqera Platform environment variables (TOWER_*)
     metadata = {
@@ -212,6 +357,9 @@ def build_sqs_message(outdir: str, wrroc_metadata: Dict[str, Any]) -> Dict[str, 
 
     # Merge WRROC metadata
     metadata.update(wrroc_metadata)
+
+    # Merge API metadata (including resolved params!)
+    metadata.update(api_metadata)
 
     message = {
         "source_prefix": f"{outdir}/",
@@ -279,7 +427,7 @@ def main():
     parser.add_argument(
         "--outdir",
         required=True,
-        help="Output directory (from NXF_PARAMS_outdir)"
+        help="Output directory (from TOWER_OUTDIR)"
     )
 
     args = parser.parse_args()
@@ -306,11 +454,19 @@ def main():
         print("AWS credentials are not available in this compute environment.")
         sys.exit(1)
 
-    # Step 2: Wait for WRROC file
+    # Step 2: Fetch workflow details from Seqera Platform API
+    workflow_data = fetch_workflow_details()
+    api_metadata = extract_api_metadata(workflow_data)
+
+    if api_metadata:
+        print("\nExtracted API metadata:")
+        print(json.dumps(api_metadata, indent=2))
+
+    # Step 3: Wait for WRROC file
     wrroc_path = f"{args.outdir}/ro-crate-metadata.json"
     wrroc_found = wait_for_wrroc_file(wrroc_path)
 
-    # Step 3: Extract WRROC metadata if file exists
+    # Step 4: Extract WRROC metadata if file exists
     wrroc_metadata = {}
     if wrroc_found:
         wrroc_metadata = extract_wrroc_metadata(wrroc_path)
@@ -318,8 +474,8 @@ def main():
             print("\nExtracted WRROC metadata:")
             print(json.dumps(wrroc_metadata, indent=2))
 
-    # Step 4: Build and send SQS message
-    message = build_sqs_message(args.outdir, wrroc_metadata)
+    # Step 5: Build and send SQS message
+    message = build_sqs_message(args.outdir, wrroc_metadata, api_metadata)
     success = send_sqs_message(args.queue_url, args.region, message)
 
     if success:
