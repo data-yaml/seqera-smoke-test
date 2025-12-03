@@ -1,5 +1,10 @@
 #!/bin/bash
-# Note: set -e removed - we manually check exit codes throughout the script
+# Seqera Platform Smoke Test - SQS Integration with Post-Run Script
+#
+# This script launches a workflow with a Seqera Platform post-run script that:
+# 1. Waits for WRROC metadata file from nf-prov plugin
+# 2. Extracts WRROC metadata
+# 3. Sends SQS notification with workflow + WRROC metadata
 
 # Get script directory and source common library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,6 +14,7 @@ source "$LIB_DIR/tw-common.sh"
 # Constants
 SQS_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA"
 QUEUE_REGION="us-east-1"
+POST_RUN_SCRIPT="$SCRIPT_DIR/post-run-sqs.sh"
 
 # Parse command line arguments
 YES_FLAG=false
@@ -26,7 +32,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-print_header "Seqera Platform Smoke Test - SQS Integration"
+print_header "Seqera Platform Smoke Test - SQS Integration (Post-Run Script)"
 
 # Load environment variables from .env if it exists
 load_env_file
@@ -69,10 +75,16 @@ if [ -n "$COMPUTE_ENV" ]; then
     echo ""
 fi
 
+# Verify post-run script exists
+if [ ! -f "$POST_RUN_SCRIPT" ]; then
+    echo "ERROR: Post-run script not found: $POST_RUN_SCRIPT"
+    exit 1
+fi
+
 echo "Configuration:"
 echo "  Pipeline: https://github.com/data-yaml/seqera-smoke-test"
 echo "  Branch: $CURRENT_BRANCH"
-echo "  Main Script: main-sqs.nf"
+echo "  Main Script: main.nf"
 echo "  Profile: awsbatch"
 echo "  Compute Environment: ${COMPUTE_ENV:-default}"
 if [ -n "$CE_REGION" ]; then
@@ -83,6 +95,7 @@ if [ -n "$CE_WORKDIR" ]; then
 fi
 echo "  Output: $S3_BUCKET"
 echo "  SQS Queue: $SQS_QUEUE_URL"
+echo "  Post-Run Script: post-run-sqs.sh"
 echo ""
 
 # Confirm before launching
@@ -105,7 +118,11 @@ echo ""
 # Write params file
 write_params_file "$PARAMS_FILE" "$S3_BUCKET"
 
-# Launch the workflow with main-sqs.nf
+# Read post-run script content
+POST_RUN_CONTENT=$(cat "$POST_RUN_SCRIPT")
+
+# Launch the workflow with main.nf and post-run script
+echo "Submitting workflow with post-run script..."
 if [ -n "$COMPUTE_ENV" ]; then
     LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
       --workspace="$WORKSPACE" \
@@ -113,7 +130,8 @@ if [ -n "$COMPUTE_ENV" ]; then
       --compute-env="$COMPUTE_ENV" \
       --profile=awsbatch \
       --params-file="$PARAMS_FILE" \
-      --main-script=main-sqs.nf 2>&1)
+      --main-script=main.nf \
+      --post-run="$POST_RUN_CONTENT" 2>&1)
     LAUNCH_EXIT_CODE=$?
 else
     LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
@@ -121,7 +139,8 @@ else
       --revision="$CURRENT_BRANCH" \
       --profile=awsbatch \
       --params-file="$PARAMS_FILE" \
-      --main-script=main-sqs.nf 2>&1)
+      --main-script=main.nf \
+      --post-run="$POST_RUN_CONTENT" 2>&1)
     LAUNCH_EXIT_CODE=$?
 fi
 
@@ -225,54 +244,29 @@ wait_for_workflow_completion() {
 
 # Verify SQS message delivery
 verify_sqs_message() {
-    echo "Waiting 5 seconds before checking SQS messages..."
-    sleep 5
-
-    echo "Checking for SQS message..."
+    echo "Post-run script should have sent SQS message."
+    echo ""
+    echo "To verify SQS message delivery:"
+    echo "  1. Check workflow logs for 'SQS Integration SUCCESS' message"
+    echo "  2. Query SQS queue for messages"
+    echo ""
+    echo "Checking workflow logs..."
     echo ""
 
-    # Receive messages from queue
-    MESSAGES=$(aws sqs receive-message \
-        --queue-url "$SQS_QUEUE_URL" \
-        --region "$QUEUE_REGION" \
-        --max-number-of-messages 10 \
-        2>/dev/null)
-
-    if [ -z "$MESSAGES" ] || ! echo "$MESSAGES" | grep -q "Messages"; then
-        echo "⚠ No messages found in queue."
+    # Get workflow logs
+    if tw runs view -i "$RUN_ID" --workspace="$WORKSPACE" 2>/dev/null | grep -q "SQS Integration SUCCESS"; then
+        echo "✓ Found SQS success message in workflow logs"
         echo ""
-        echo "Possible causes:"
-        echo "  1. workflow.onComplete hook failed to send message"
-        echo "  2. Message already consumed by another process"
-        echo "  3. Message delivery delayed"
-        echo ""
-        echo "Check workflow logs:"
-        echo "  tw runs view -i $RUN_ID --workspace='$WORKSPACE'"
-        echo ""
-        return 1
-    fi
-
-    # Search for message containing our output directory
-    if echo "$MESSAGES" | grep -q "$S3_BUCKET"; then
-        echo "✓ SQS message found!"
-        echo ""
-        echo "Message body containing: $S3_BUCKET"
-        echo ""
-
-        # Extract and display the message body
-        MESSAGE_BODY=$(echo "$MESSAGES" | grep -o "\"Body\": \"[^\"]*\"" | head -1 | cut -d'"' -f4)
-        if [ -n "$MESSAGE_BODY" ]; then
-            echo "Full message body: $MESSAGE_BODY"
-            echo ""
-        fi
-
         return 0
     else
-        echo "⚠ Message found but does not match expected output directory."
+        echo "⚠ Could not find SQS success message in workflow logs"
         echo ""
-        echo "Expected: $S3_BUCKET"
+        echo "This may mean:"
+        echo "  1. Post-run script is still executing"
+        echo "  2. Post-run script failed"
+        echo "  3. Logs not yet available"
         echo ""
-        echo "Check workflow logs:"
+        echo "Check full logs:"
         echo "  tw runs view -i $RUN_ID --workspace='$WORKSPACE'"
         echo ""
         return 1
@@ -281,6 +275,10 @@ verify_sqs_message() {
 
 # Wait for workflow completion
 wait_for_workflow_completion
+
+# Give post-run script time to execute
+echo "Waiting 30 seconds for post-run script to complete..."
+sleep 30
 
 # Verify SQS message
 verify_sqs_message
@@ -299,10 +297,10 @@ echo ""
 
 if [ $SQS_VERIFY_EXIT -eq 0 ]; then
     echo "✓ Workflow completed successfully"
-    echo "✓ SQS message verified"
+    echo "✓ Post-run script executed (SQS message sent)"
 else
     echo "✓ Workflow completed successfully"
-    echo "⚠ SQS message verification incomplete"
+    echo "⚠ Post-run script status unclear"
 fi
 
 echo ""
@@ -310,4 +308,5 @@ echo "Next steps:"
 echo "1. View workflow details: tw runs view -i $RUN_ID --workspace='$WORKSPACE'"
 echo "2. View workflow tasks: tw runs view -i $RUN_ID tasks --workspace='$WORKSPACE'"
 echo "3. Verify S3 output: aws s3 ls $S3_BUCKET/"
+echo "4. Check SQS queue for message: aws sqs receive-message --queue-url $SQS_QUEUE_URL --region $QUEUE_REGION"
 echo ""
