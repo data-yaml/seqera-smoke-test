@@ -14,7 +14,7 @@ source "$LIB_DIR/tw-common.sh"
 # Constants
 SQS_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA"
 QUEUE_REGION="us-east-1"
-POST_RUN_SCRIPT="$SCRIPT_DIR/post-run-sqs.sh"
+POST_RUN_SCRIPT="$SCRIPT_DIR/scripts/post-run-sqs.sh"
 
 # Parse command line arguments
 YES_FLAG=false
@@ -115,8 +115,8 @@ echo ""
 echo "Launching workflow via Seqera Platform..."
 echo ""
 
-# Write params file
-write_params_file "$PARAMS_FILE" "$S3_BUCKET"
+# Write params file with SQS configuration
+write_params_file "$PARAMS_FILE" "$S3_BUCKET" "$SQS_QUEUE_URL" "$QUEUE_REGION"
 
 # Launch the workflow with main.nf and post-run script
 echo "Submitting workflow with post-run script..."

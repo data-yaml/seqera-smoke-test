@@ -398,10 +398,20 @@ detect_git_branch() {
 write_params_file() {
     local params_file="$1"
     local s3_bucket="$2"
+    local sqs_queue_url="${3:-}"
+    local sqs_region="${4:-us-east-1}"
 
     cat > "$params_file" <<EOF
 outdir: $s3_bucket
 EOF
+
+    # Add SQS params if queue URL is provided
+    if [ -n "$sqs_queue_url" ]; then
+        cat >> "$params_file" <<EOF
+sqs_queue_url: $sqs_queue_url
+sqs_region: $sqs_region
+EOF
+    fi
 
     echo "Parameters saved to: $params_file"
     echo ""
