@@ -160,20 +160,24 @@ workflow.onComplete {
     if (wrrocFound) {
         println('Extracting WRROC metadata...')
         try {
-            def wrrocJson = new groovy.json.JsonSlurper().parse(wrrocFile)
-            def graph = wrrocJson['@graph']
+            String idKey = '@id'
+            String typeKey = '@type'
+            String graphKey = '@graph'
+
+            Object wrrocJson = new groovy.json.JsonSlurper().parse(wrrocFile)
+            List<Map<String, Object>> graph = wrrocJson[graphKey] as List<Map<String, Object>>
 
             // Find the root dataset
-            def rootDataset = graph.find { it['@id'] == './' }
+            Map<String, Object> rootDataset = graph.find { entry -> entry[idKey] == './' }
             if (rootDataset) {
                 wrrocMetadata['wrroc_name'] = rootDataset.name
                 wrrocMetadata['wrroc_date_published'] = rootDataset.datePublished
                 wrrocMetadata['wrroc_license'] = rootDataset.license
 
                 // Find author details
-                def authorId = rootDataset.author?['@id']
+                String authorId = rootDataset.author?[idKey] as String
                 if (authorId) {
-                    def author = graph.find { it['@id'] == authorId }
+                    Map<String, Object> author = graph.find { entry -> entry[idKey] == authorId }
                     if (author) {
                         wrrocMetadata['wrroc_author_name'] = author.name
                         wrrocMetadata['wrroc_author_orcid'] = authorId
@@ -182,18 +186,18 @@ workflow.onComplete {
             }
 
             // Find the workflow run action
-            def workflowRun = graph.find { it['@type'] == 'CreateAction' && it.name?.startsWith('Nextflow workflow run') }
+            Map<String, Object> workflowRun = graph.find { entry -> entry[typeKey] == 'CreateAction' && entry.name?.startsWith('Nextflow workflow run') }
             if (workflowRun) {
-                wrrocMetadata['wrroc_run_id'] = workflowRun['@id']?.replaceAll('^#', '')
+                wrrocMetadata['wrroc_run_id'] = workflowRun[idKey]?.replaceAll('^#', '')
                 wrrocMetadata['wrroc_start_time'] = workflowRun.startTime
                 wrrocMetadata['wrroc_end_time'] = workflowRun.endTime
             }
 
             // Find the main workflow file
-            def mainWorkflow = graph.find { it['@id'] == 'main-sqs.nf' }
+            Map<String, Object> mainWorkflow = graph.find { entry -> entry[idKey] == 'main-sqs.nf' }
             if (mainWorkflow) {
                 wrrocMetadata['wrroc_runtime_platform'] = mainWorkflow.runtimePlatform
-                wrrocMetadata['wrroc_programming_language'] = mainWorkflow.programmingLanguage?['@id']
+                wrrocMetadata['wrroc_programming_language'] = mainWorkflow.programmingLanguage?[idKey]
             }
 
             println("✓ Extracted ${wrrocMetadata.size()} WRROC metadata fields")
@@ -231,7 +235,7 @@ workflow.onComplete {
     Map<String, Object> messageBody = [
         source_prefix: "${outdir}/",  // trailing '/' for folder; registry & package inferred from this
         metadata: metadata,
-        commit_message: "Seqera Platform smoke test completed at ${new Date().format("yyyy-MM-dd HH:mm:ss")}"
+        commit_message: "Seqera Platform smoke test completed at ${new Date().format('yyyy-MM-dd HH:mm:ss')}"
     ]
 
     String messageJson = groovy.json.JsonOutput.toJson(messageBody)
