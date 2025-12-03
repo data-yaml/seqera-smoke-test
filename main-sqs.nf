@@ -124,12 +124,60 @@ long getFileSize(String path, String awsCmd, String encoding) {
     }
 }
 
+// Helper method to list files in directory (local or S3)
+void listDirectoryContents(String path, String awsCmd, String encoding) {
+    if (path.startsWith('s3://')) {
+        // List S3 directory contents
+        println('Listing S3 directory contents:')
+        Process p = [awsCmd, 's3', 'ls', path].execute()
+        p.waitFor()
+        if (p.exitValue() == 0) {
+            String output = p.inputStream.getText(encoding)
+            if (output.trim()) {
+                output.split('\n').each { line ->
+                    println("  ${line}")
+                }
+            } else {
+                println('  (directory is empty)')
+            }
+        } else {
+            println('  (failed to list S3 directory)')
+        }
+    } else {
+        // List local directory contents
+        File dir = new File(path)
+        if (dir.exists() && dir.isDirectory()) {
+            println('Listing local directory contents:')
+            File[] files = dir.listFiles()
+            if (files && files.length > 0) {
+                files.each { file ->
+                    String fileType = file.isDirectory() ? 'DIR ' : 'FILE'
+                    String fileSize = file.isFile() ? " (${file.length()} bytes)" : ''
+                    println("  ${fileType}: ${file.name}${fileSize}")
+                }
+            } else {
+                println('  (directory is empty)')
+            }
+        } else if (dir.exists() && dir.isFile()) {
+            println("Path is a file, not a directory: ${path}")
+        } else {
+            println("Directory does not exist yet: ${path}")
+        }
+    }
+}
+
 // Helper method to wait for and verify WRROC file
 boolean waitForWrrocFile(String wrrocPath, int maxWaitSeconds, int checkIntervalMs,
                         String awsCmd, String encoding, String emptyLine, String separator) {
     println('Waiting for WRROC file to be written by nf-prov plugin...')
     println("Target path: ${wrrocPath}")
     println("Path type: ${wrrocPath.startsWith('s3://') ? 'S3' : 'Local'}")
+
+    // Extract directory path from file path
+    String dirPath = wrrocPath.contains('/') ? wrrocPath.substring(0, wrrocPath.lastIndexOf('/')) : '.'
+    println(emptyLine)
+    listDirectoryContents(dirPath, awsCmd, encoding)
+    println(emptyLine)
 
     int attempts = (maxWaitSeconds * 1000) / checkIntervalMs
     boolean wrrocFound = false
@@ -168,7 +216,7 @@ boolean waitForWrrocFile(String wrrocPath, int maxWaitSeconds, int checkInterval
 }
 
 // Helper method to extract WRROC metadata from file
-Map<String, Object> extractWrrocMetadata(File wrrocFile, String emptyLine) {
+Map<String, Object> extractWrrocMetadata(File wrrocFile, String emptyLine, String separator) {
     Map<String, Object> wrrocMetadata = [:]
     println('Extracting WRROC metadata...')
 
@@ -178,6 +226,17 @@ Map<String, Object> extractWrrocMetadata(File wrrocFile, String emptyLine) {
         String graphKey = '@graph'
 
         Object wrrocJson = new groovy.json.JsonSlurper().parse(wrrocFile)
+
+        // Dump full WRROC JSON for debugging
+        println(emptyLine)
+        println(separator)
+        println('WRROC Full JSON Content:')
+        println(separator)
+        String prettyJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(wrrocJson))
+        println(prettyJson)
+        println(separator)
+        println(emptyLine)
+
         List<Map<String, Object>> graph = wrrocJson[graphKey] as List<Map<String, Object>>
 
         // Find the root dataset
@@ -213,13 +272,14 @@ Map<String, Object> extractWrrocMetadata(File wrrocFile, String emptyLine) {
             wrrocMetadata['wrroc_programming_language'] = mainWorkflow.programmingLanguage?[idKey]
         }
 
-        println("✓ Extracted ${wrrocMetadata.size()} WRROC metadata fields")
+        println("✓ Extracted ${wrrocMetadata.size()} WRROC metadata fields:")
         wrrocMetadata.each { key, value ->
             println("  ${key}: ${value}")
         }
     } catch (Exception e) {
         println("⚠ Warning: Failed to parse WRROC file: ${e.message}")
         println('  Continuing without WRROC metadata')
+        e.printStackTrace()
     }
     println(emptyLine)
 
@@ -391,7 +451,7 @@ workflow.onComplete {
     Map<String, Object> wrrocMetadata = [:]
     if (wrrocFound) {
         File wrrocFile = new File(wrrocPath)
-        wrrocMetadata = extractWrrocMetadata(wrrocFile, emptyLine)
+        wrrocMetadata = extractWrrocMetadata(wrrocFile, emptyLine, separator)
     }
 
     // Step 5: Build and send SQS message
