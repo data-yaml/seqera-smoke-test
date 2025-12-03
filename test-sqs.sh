@@ -118,9 +118,6 @@ echo ""
 # Write params file
 write_params_file "$PARAMS_FILE" "$S3_BUCKET"
 
-# Read post-run script content
-POST_RUN_CONTENT=$(cat "$POST_RUN_SCRIPT")
-
 # Launch the workflow with main.nf and post-run script
 echo "Submitting workflow with post-run script..."
 if [ -n "$COMPUTE_ENV" ]; then
@@ -131,7 +128,7 @@ if [ -n "$COMPUTE_ENV" ]; then
       --profile=awsbatch \
       --params-file="$PARAMS_FILE" \
       --main-script=main.nf \
-      --post-run="$POST_RUN_CONTENT" 2>&1)
+      --post-run="$POST_RUN_SCRIPT" 2>&1)
     LAUNCH_EXIT_CODE=$?
 else
     LAUNCH_OUTPUT=$(tw launch https://github.com/data-yaml/seqera-smoke-test \
@@ -140,7 +137,7 @@ else
       --profile=awsbatch \
       --params-file="$PARAMS_FILE" \
       --main-script=main.nf \
-      --post-run="$POST_RUN_CONTENT" 2>&1)
+      --post-run="$POST_RUN_SCRIPT" 2>&1)
     LAUNCH_EXIT_CODE=$?
 fi
 
