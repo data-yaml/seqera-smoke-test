@@ -37,38 +37,8 @@ workflow {
     tiny_test.out[0].view { file -> "Generated output: ${file}" }
 }
 
-workflow.onComplete {
-    /* groovylint-disable-next-line DuplicateNumberLiteral */
-    final int exitSuccess = 0
-
-    String outdir = params.outdir
-    String queueUrl = 'https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA'
-    String region = 'us-east-1'
-    String emptyLine = ''
-    String separator = '========================================'
-    String encoding = 'UTF-8'
-    String awsCmd = 'aws'
-    String errorDetailsMsg = 'Error details:'
-
-    println(emptyLine)
-    println(separator)
-    println('SQS Integration - Starting')
-    println(separator)
-    println("Queue URL: ${queueUrl}")
-    println("Region: ${region}")
-    println("Output folder: ${outdir}")
-    println("Workflow status: ${workflow.success ? 'SUCCESS' : 'FAILED'}")
-    println(emptyLine)
-
-    // Check if workflow succeeded - only send SQS notification for successful runs
-    if (!workflow.success) {
-        println('Workflow failed - skipping SQS notification')
-        println("Error report: ${workflow.errorReport}")
-        println(separator)
-        return
-    }
-
-    // Step 1: Check if AWS CLI is available
+// Helper method to check if AWS CLI is available
+void checkAwsCliAvailability(String awsCmd, String encoding, int exitSuccess, String emptyLine, String separator) {
     println('Checking AWS CLI availability...')
     Process awsCheck = [awsCmd, '--version'].execute()
     awsCheck.waitFor()
@@ -88,8 +58,10 @@ workflow.onComplete {
     String awsVersion = awsCheck.inputStream.getText(encoding).trim()
     println("✓ AWS CLI found: ${awsVersion}")
     println(emptyLine)
+}
 
-    // Step 2: Check AWS credentials
+// Helper method to check AWS credentials
+void checkAwsCredentials(String awsCmd, String encoding, int exitSuccess, String emptyLine, String separator, String errorDetailsMsg) {
     println('Checking AWS credentials...')
     Process credsCheck = [awsCmd, 'sts', 'get-caller-identity'].execute()
     credsCheck.waitFor()
@@ -115,14 +87,13 @@ workflow.onComplete {
     println('✓ AWS credentials found')
     println("Identity: ${identity}")
     println(emptyLine)
+}
 
-    // Step 3: Wait for WRROC file (nf-prov output)
+// Helper method to wait for and verify WRROC file
+boolean waitForWrrocFile(String wrrocPath, int maxWaitSeconds, int checkIntervalMs, String emptyLine, String separator) {
     println('Waiting for WRROC file to be written by nf-prov plugin...')
-    String wrrocPath = "${outdir}/ro-crate-metadata.json"
     File wrrocFile = new File(wrrocPath)
 
-    int maxWaitSeconds = 60
-    int checkIntervalMs = 500
     int attempts = (maxWaitSeconds * 1000) / checkIntervalMs
     boolean wrrocFound = false
 
@@ -155,68 +126,70 @@ workflow.onComplete {
     }
     println(emptyLine)
 
-    // Step 4: Extract WRROC metadata
+    return wrrocFound
+}
+
+// Helper method to extract WRROC metadata from file
+Map<String, Object> extractWrrocMetadata(File wrrocFile, String emptyLine) {
     Map<String, Object> wrrocMetadata = [:]
-    if (wrrocFound) {
-        println('Extracting WRROC metadata...')
-        try {
-            String idKey = '@id'
-            String typeKey = '@type'
-            String graphKey = '@graph'
+    println('Extracting WRROC metadata...')
 
-            Object wrrocJson = new groovy.json.JsonSlurper().parse(wrrocFile)
-            List<Map<String, Object>> graph = wrrocJson[graphKey] as List<Map<String, Object>>
+    try {
+        String idKey = '@id'
+        String typeKey = '@type'
+        String graphKey = '@graph'
 
-            // Find the root dataset
-            Map<String, Object> rootDataset = graph.find { entry -> entry[idKey] == './' }
-            if (rootDataset) {
-                wrrocMetadata['wrroc_name'] = rootDataset.name
-                wrrocMetadata['wrroc_date_published'] = rootDataset.datePublished
-                wrrocMetadata['wrroc_license'] = rootDataset.license
+        Object wrrocJson = new groovy.json.JsonSlurper().parse(wrrocFile)
+        List<Map<String, Object>> graph = wrrocJson[graphKey] as List<Map<String, Object>>
 
-                // Find author details
-                String authorId = rootDataset.author?[idKey] as String
-                if (authorId) {
-                    Map<String, Object> author = graph.find { entry -> entry[idKey] == authorId }
-                    if (author) {
-                        wrrocMetadata['wrroc_author_name'] = author.name
-                        wrrocMetadata['wrroc_author_orcid'] = authorId
-                    }
+        // Find the root dataset
+        Map<String, Object> rootDataset = graph.find { entry -> entry[idKey] == './' }
+        if (rootDataset) {
+            wrrocMetadata['wrroc_name'] = rootDataset.name
+            wrrocMetadata['wrroc_date_published'] = rootDataset.datePublished
+            wrrocMetadata['wrroc_license'] = rootDataset.license
+
+            // Find author details
+            String authorId = rootDataset.author?[idKey] as String
+            if (authorId) {
+                Map<String, Object> author = graph.find { entry -> entry[idKey] == authorId }
+                if (author) {
+                    wrrocMetadata['wrroc_author_name'] = author.name
+                    wrrocMetadata['wrroc_author_orcid'] = authorId
                 }
             }
-
-            // Find the workflow run action
-            Map<String, Object> workflowRun = graph.find { entry -> entry[typeKey] == 'CreateAction' && entry.name?.startsWith('Nextflow workflow run') }
-            if (workflowRun) {
-                wrrocMetadata['wrroc_run_id'] = workflowRun[idKey]?.replaceAll('^#', '')
-                wrrocMetadata['wrroc_start_time'] = workflowRun.startTime
-                wrrocMetadata['wrroc_end_time'] = workflowRun.endTime
-            }
-
-            // Find the main workflow file
-            Map<String, Object> mainWorkflow = graph.find { entry -> entry[idKey] == 'main-sqs.nf' }
-            if (mainWorkflow) {
-                wrrocMetadata['wrroc_runtime_platform'] = mainWorkflow.runtimePlatform
-                wrrocMetadata['wrroc_programming_language'] = mainWorkflow.programmingLanguage?[idKey]
-            }
-
-            println("✓ Extracted ${wrrocMetadata.size()} WRROC metadata fields")
-            wrrocMetadata.each { key, value ->
-                println("  ${key}: ${value}")
-            }
-        } catch (Exception e) {
-            println("⚠ Warning: Failed to parse WRROC file: ${e.message}")
-            println('  Continuing without WRROC metadata')
         }
-        println(emptyLine)
+
+        // Find the workflow run action
+        Map<String, Object> workflowRun = graph.find { entry -> entry[typeKey] == 'CreateAction' && entry.name?.startsWith('Nextflow workflow run') }
+        if (workflowRun) {
+            wrrocMetadata['wrroc_run_id'] = workflowRun[idKey]?.replaceAll('^#', '')
+            wrrocMetadata['wrroc_start_time'] = workflowRun.startTime
+            wrrocMetadata['wrroc_end_time'] = workflowRun.endTime
+        }
+
+        // Find the main workflow file
+        Map<String, Object> mainWorkflow = graph.find { entry -> entry[idKey] == 'main-sqs.nf' }
+        if (mainWorkflow) {
+            wrrocMetadata['wrroc_runtime_platform'] = mainWorkflow.runtimePlatform
+            wrrocMetadata['wrroc_programming_language'] = mainWorkflow.programmingLanguage?[idKey]
+        }
+
+        println("✓ Extracted ${wrrocMetadata.size()} WRROC metadata fields")
+        wrrocMetadata.each { key, value ->
+            println("  ${key}: ${value}")
+        }
+    } catch (Exception e) {
+        println("⚠ Warning: Failed to parse WRROC file: ${e.message}")
+        println('  Continuing without WRROC metadata')
     }
+    println(emptyLine)
 
-    // Step 5: Send SQS message
-    println('Sending SQS message...')
+    return wrrocMetadata
+}
 
-    // Construct Quilt packaging message body according to:
-    // https://docs.quilt.bio/quilt-platform-catalog-user/packaging
-    // Only source_prefix is required; registry and package_name are inferred from it
+// Helper method to build SQS message body
+Map<String, Object> buildSqsMessageBody(String outdir, Map<String, Object> wrrocMetadata) {
     Map<String, Object> metadata = [
         nextflow_version: workflow.nextflow.version.toString(),
         workflow_name: workflow.scriptName,
@@ -232,14 +205,17 @@ workflow.onComplete {
         metadata.putAll(wrrocMetadata)
     }
 
-    Map<String, Object> messageBody = [
-        source_prefix: "${outdir}/",  // trailing '/' for folder; registry & package inferred from this
+    return [
+        source_prefix: "${outdir}/",
         metadata: metadata,
         commit_message: "Seqera Platform smoke test completed at ${new Date().format('yyyy-MM-dd HH:mm:ss')}"
     ]
+}
 
-    String messageJson = groovy.json.JsonOutput.toJson(messageBody)
-
+// Helper method to send SQS message
+void sendSqsMessage(String queueUrl, String region, String outdir, String messageJson, String awsCmd,
+                    String encoding, int exitSuccess, String emptyLine, String separator, String errorDetailsMsg) {
+    println('Sending SQS message...')
     println('Message body:')
     println(messageJson)
     println(emptyLine)
@@ -252,63 +228,137 @@ workflow.onComplete {
     ]
     Process p = cmd.execute()
     p.waitFor()
+
     if (p.exitValue() != exitSuccess) {
-        String errorText = p.errorStream.getText(encoding)
-        String stdoutText = p.inputStream.getText(encoding)
-        println(emptyLine)
-        println(separator)
-        println('ERROR: SQS Message Send Failed')
-        println(separator)
-        println("Exit Code: ${p.exitValue()}")
-        println("Queue URL: ${queueUrl}")
-        println("Region: ${region}")
-        println("Output folder: ${outdir}")
-        println(emptyLine)
-        println('=== AWS CLI STDERR ===')
-        println(errorText.empty ? '(empty)' : errorText)
-        println(emptyLine)
-        println('=== AWS CLI STDOUT ===')
-        println(stdoutText.empty ? '(empty)' : stdoutText)
-        println(emptyLine)
-        println(errorDetailsMsg)
-        println(errorText)
-        println(emptyLine)
-        println('Common causes:')
-        if (errorText.contains('NonExistentQueue')) {
-            println('  - Queue does not exist or URL is incorrect')
-            println("  - Check queue URL: ${queueUrl}")
-        } else if (errorText.contains('AccessDenied') || errorText.contains('not authorized')) {
-            println('  - Missing IAM permission: sqs:SendMessage')
-            println('  - The compute environment\'s IAM role must have this permission')
-        } else if (errorText.contains('InvalidClientTokenId')) {
-            println('  - AWS credentials are invalid or expired')
-        } else {
-            println('  - Check queue URL and IAM permissions')
-        }
-        println(emptyLine)
-        println('Required IAM permission on compute environment role:')
-        println("  - sqs:SendMessage for queue: ${queueUrl}")
-        println(emptyLine)
-        println('This workflow will now FAIL due to SQS send error.')
-        println(separator)
-        // FAIL THE WORKFLOW - SQS is a critical requirement
-        throw new IllegalStateException("SQS message send failed: ${errorText}")
+        handleSqsSendError(p, queueUrl, region, outdir, encoding, emptyLine, separator, errorDetailsMsg)
     } else {
-        String response = p.inputStream.getText(encoding)
-        println(separator)
-        println('✓✓✓ SQS Integration SUCCESS ✓✓✓')
-        println(separator)
-        println('Message sent successfully to queue!')
-        println(emptyLine)
-        println("Queue URL: ${queueUrl}")
-        println("Region: ${region}")
-        println("Output folder: ${outdir}")
-        println(emptyLine)
-        println('Message Content (Quilt Packaging Request):')
-        println(messageJson)
-        println(emptyLine)
-        println('AWS SQS Response:')
-        println(response)
-        println(separator)
+        handleSqsSendSuccess(p, queueUrl, region, outdir, messageJson, encoding, emptyLine, separator)
     }
+}
+
+// Helper method to handle SQS send error
+void handleSqsSendError(Process p, String queueUrl, String region, String outdir,
+                        String encoding, String emptyLine, String separator, String errorDetailsMsg) {
+    String errorText = p.errorStream.getText(encoding)
+    String stdoutText = p.inputStream.getText(encoding)
+
+    println(emptyLine)
+    println(separator)
+    println('ERROR: SQS Message Send Failed')
+    println(separator)
+    println("Exit Code: ${p.exitValue()}")
+    println("Queue URL: ${queueUrl}")
+    println("Region: ${region}")
+    println("Output folder: ${outdir}")
+    println(emptyLine)
+    println('=== AWS CLI STDERR ===')
+    println(errorText.empty ? '(empty)' : errorText)
+    println(emptyLine)
+    println('=== AWS CLI STDOUT ===')
+    println(stdoutText.empty ? '(empty)' : stdoutText)
+    println(emptyLine)
+    println(errorDetailsMsg)
+    println(errorText)
+    println(emptyLine)
+    println('Common causes:')
+
+    if (errorText.contains('NonExistentQueue')) {
+        println('  - Queue does not exist or URL is incorrect')
+        println("  - Check queue URL: ${queueUrl}")
+    } else if (errorText.contains('AccessDenied') || errorText.contains('not authorized')) {
+        println('  - Missing IAM permission: sqs:SendMessage')
+        println('  - The compute environment\'s IAM role must have this permission')
+    } else if (errorText.contains('InvalidClientTokenId')) {
+        println('  - AWS credentials are invalid or expired')
+    } else {
+        println('  - Check queue URL and IAM permissions')
+    }
+
+    println(emptyLine)
+    println('Required IAM permission on compute environment role:')
+    println("  - sqs:SendMessage for queue: ${queueUrl}")
+    println(emptyLine)
+    println('This workflow will now FAIL due to SQS send error.')
+    println(separator)
+    throw new IllegalStateException("SQS message send failed: ${errorText}")
+}
+
+// Helper method to handle SQS send success
+void handleSqsSendSuccess(Process p, String queueUrl, String region, String outdir,
+                          String messageJson, String encoding, String emptyLine, String separator) {
+    String response = p.inputStream.getText(encoding)
+    println(separator)
+    println('✓✓✓ SQS Integration SUCCESS ✓✓✓')
+    println(separator)
+    println('Message sent successfully to queue!')
+    println(emptyLine)
+    println("Queue URL: ${queueUrl}")
+    println("Region: ${region}")
+    println("Output folder: ${outdir}")
+    println(emptyLine)
+    println('Message Content (Quilt Packaging Request):')
+    println(messageJson)
+    println(emptyLine)
+    println('AWS SQS Response:')
+    println(response)
+    println(separator)
+}
+
+workflow.onComplete {
+    /* groovylint-disable-next-line DuplicateNumberLiteral */
+    final int exitSuccess = 0
+
+    // Configuration
+    String outdir = params.outdir
+    String queueUrl = 'https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA'
+    String region = 'us-east-1'
+    String emptyLine = ''
+    String separator = '========================================'
+    String encoding = 'UTF-8'
+    String awsCmd = 'aws'
+    String errorDetailsMsg = 'Error details:'
+
+    // Print header
+    println(emptyLine)
+    println(separator)
+    println('SQS Integration - Starting')
+    println(separator)
+    println("Queue URL: ${queueUrl}")
+    println("Region: ${region}")
+    println("Output folder: ${outdir}")
+    println("Workflow status: ${workflow.success ? 'SUCCESS' : 'FAILED'}")
+    println(emptyLine)
+
+    // Check if workflow succeeded - only send SQS notification for successful runs
+    if (!workflow.success) {
+        println('Workflow failed - skipping SQS notification')
+        println("Error report: ${workflow.errorReport}")
+        println(separator)
+        return
+    }
+
+    // Step 1: Check AWS CLI availability
+    checkAwsCliAvailability(awsCmd, encoding, exitSuccess, emptyLine, separator)
+
+    // Step 2: Check AWS credentials
+    checkAwsCredentials(awsCmd, encoding, exitSuccess, emptyLine, separator, errorDetailsMsg)
+
+    // Step 3: Wait for WRROC file (nf-prov output)
+    String wrrocPath = "${outdir}/ro-crate-metadata.json"
+    int maxWaitSeconds = 60
+    int checkIntervalMs = 500
+    boolean wrrocFound = waitForWrrocFile(wrrocPath, maxWaitSeconds, checkIntervalMs, emptyLine, separator)
+
+    // Step 4: Extract WRROC metadata
+    Map<String, Object> wrrocMetadata = [:]
+    if (wrrocFound) {
+        File wrrocFile = new File(wrrocPath)
+        wrrocMetadata = extractWrrocMetadata(wrrocFile, emptyLine)
+    }
+
+    // Step 5: Build and send SQS message
+    Map<String, Object> messageBody = buildSqsMessageBody(outdir, wrrocMetadata)
+    String messageJson = groovy.json.JsonOutput.toJson(messageBody)
+
+    sendSqsMessage(queueUrl, region, outdir, messageJson, awsCmd, encoding, exitSuccess, emptyLine, separator, errorDetailsMsg)
 }
