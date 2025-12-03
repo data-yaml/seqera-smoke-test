@@ -14,7 +14,7 @@ source "$LIB_DIR/tw-common.sh"
 # Constants
 SQS_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/850787717197/sales-prod-PackagerQueue-2BfTcvCBFuJA"
 QUEUE_REGION="us-east-1"
-POST_RUN_SCRIPT="$SCRIPT_DIR/post-run-sqs.sh"
+POST_RUN_SCRIPT="$SCRIPT_DIR/post-run-sqs-minimal.sh"
 
 # Parse command line arguments
 YES_FLAG=false
@@ -95,7 +95,7 @@ if [ -n "$CE_WORKDIR" ]; then
 fi
 echo "  Output: $S3_BUCKET"
 echo "  SQS Queue: $SQS_QUEUE_URL"
-echo "  Post-Run Script: post-run-sqs.sh"
+echo "  Post-Run Script: post-run-sqs-minimal.sh (downloads Python script from GitHub)"
 echo ""
 
 # Confirm before launching
