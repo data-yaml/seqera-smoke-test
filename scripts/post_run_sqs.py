@@ -128,12 +128,6 @@ def extract_api_metadata(workflow_data: Optional[Dict[str, Any]]) -> Dict[str, A
         print(f"✓ Found resolved parameters:")
         print(f"  {json.dumps(params, indent=2)}")
 
-    # Configuration
-    config = workflow_data.get("configText")
-    if config:
-        metadata["api_config_text"] = config
-        print(f"✓ Found configuration text ({len(config)} chars)")
-
     # Launch details
     launch = workflow_data.get("launch")
     if launch:

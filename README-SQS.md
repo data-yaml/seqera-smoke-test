@@ -31,6 +31,7 @@ When launching the workflow in Seqera Platform, you must specify:
 ### Seqera Platform Configuration
 
 1. **Launch Parameters** - Add the SQS parameters when launching:
+
    ```yaml
    params:
      outdir: s3://your-bucket/outputs
@@ -39,6 +40,7 @@ When launching the workflow in Seqera Platform, you must specify:
    ```
 
 2. **Post-Run Hook** - Configure in Seqera Platform:
+
    ```bash
    curl -sSfL https://raw.githubusercontent.com/data-yaml/seqera-smoke-test/parse-wrroc/scripts/post-run-sqs.sh | bash
    ```
@@ -48,19 +50,21 @@ When launching the workflow in Seqera Platform, you must specify:
 The script sends a comprehensive metadata payload including:
 
 ### From Seqera Platform API
+
 - `api_params` - Resolved parameters (including `outdir`, `sqs_queue_url`)
-- `api_config_text` - Full Nextflow configuration
 - `api_run_name`, `api_status`, `api_session_id`
 - `api_launch_id`, `api_launch_pipeline`, `api_launch_revision`
 - `api_compute_env_id`, `api_workdir`, `api_duration`
 
 ### From TOWER_* Environment Variables
+
 - `tower_workflow_id`, `tower_run_name`, `tower_project_id`
 - `tower_workspace_id`, `tower_user_id`
 - `tower_workflow_status`, `tower_workflow_start`, `tower_workflow_complete`
 - `tower_pipeline`, `tower_pipeline_revision`, `tower_nextflow_version`
 
 ### From WRROC Metadata File
+
 - `wrroc_name`, `wrroc_date_published`, `wrroc_license`
 - `wrroc_author_name`, `wrroc_author_orcid`
 - `wrroc_run_id`, `wrroc_start_time`, `wrroc_end_time`
