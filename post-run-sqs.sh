@@ -1,8 +1,6 @@
 #!/bin/bash
 # post-run script - downloads and executes Python script from GitHub
 set -euo pipefail
-echo "===== CWD ========"
-cwd
 echo "===== Local Files========"
 ls root home tmp .nextflow
 echo "=== Post-Run Environment ==="
