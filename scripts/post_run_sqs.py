@@ -411,39 +411,36 @@ def send_sqs_message(queue_url: str, region: str, message: Dict[str, Any]) -> bo
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Post-run script for Seqera Platform - sends SQS message with workflow metadata"
-    )
-    parser.add_argument(
-        "--queue-url",
-        required=True,
-        help="SQS queue URL"
-    )
-    parser.add_argument(
-        "--region",
-        required=True,
-        help="AWS region"
-    )
-    parser.add_argument(
-        "--outdir",
-        required=True,
-        help="Output directory (from TOWER_OUTDIR)"
-    )
+    print_header("SQS Integration - Post-Run Script")
 
-    args = parser.parse_args()
-
-    # Validate outdir
-    if not args.outdir:
-        print("ERROR: Output directory not set (TOWER_OUTDIR)")
-        print("This script must be run as a Seqera Platform post-run script")
+    # Step 1: Fetch workflow details from Seqera Platform API
+    # This gets us ALL the params including sqs_queue_url, sqs_region, outdir
+    workflow_data = fetch_workflow_details()
+    if not workflow_data:
+        print("ERROR: Failed to fetch workflow data from Seqera Platform API")
         sys.exit(1)
 
-    print_header("SQS Integration - Post-Run Script")
-    print(f"Queue URL: {args.queue_url}")
-    print(f"Region: {args.region}")
-    print(f"Output folder: {args.outdir}")
+    # Extract params from API response
+    params = workflow_data.get("params", {})
+    queue_url = params.get("sqs_queue_url")
+    region = params.get("sqs_region", "us-east-1")
+    outdir = params.get("outdir")
 
-    # Step 1: Check AWS CLI and credentials
+    # Validate required parameters
+    if not outdir:
+        print("ERROR: params.outdir not set in workflow")
+        sys.exit(1)
+
+    if not queue_url:
+        print("ERROR: params.sqs_queue_url not set in workflow")
+        print("Please set --params.sqs_queue_url when launching")
+        sys.exit(1)
+
+    print(f"Queue URL: {queue_url}")
+    print(f"Region: {region}")
+    print(f"Output folder: {outdir}")
+
+    # Step 2: Check AWS CLI and credentials
     if not check_aws_cli():
         print_header("ERROR: AWS CLI Not Available")
         print("The AWS CLI is not installed or not in PATH in this compute environment.")
@@ -454,19 +451,18 @@ def main():
         print("AWS credentials are not available in this compute environment.")
         sys.exit(1)
 
-    # Step 2: Fetch workflow details from Seqera Platform API
-    workflow_data = fetch_workflow_details()
+    # Step 3: Extract API metadata
     api_metadata = extract_api_metadata(workflow_data)
 
     if api_metadata:
         print("\nExtracted API metadata:")
         print(json.dumps(api_metadata, indent=2))
 
-    # Step 3: Wait for WRROC file
-    wrroc_path = f"{args.outdir}/ro-crate-metadata.json"
+    # Step 4: Wait for WRROC file
+    wrroc_path = f"{outdir}/ro-crate-metadata.json"
     wrroc_found = wait_for_wrroc_file(wrroc_path)
 
-    # Step 4: Extract WRROC metadata if file exists
+    # Step 5: Extract WRROC metadata if file exists
     wrroc_metadata = {}
     if wrroc_found:
         wrroc_metadata = extract_wrroc_metadata(wrroc_path)
@@ -474,9 +470,9 @@ def main():
             print("\nExtracted WRROC metadata:")
             print(json.dumps(wrroc_metadata, indent=2))
 
-    # Step 5: Build and send SQS message
-    message = build_sqs_message(args.outdir, wrroc_metadata, api_metadata)
-    success = send_sqs_message(args.queue_url, args.region, message)
+    # Step 6: Build and send SQS message
+    message = build_sqs_message(outdir, wrroc_metadata, api_metadata)
+    success = send_sqs_message(queue_url, region, message)
 
     if success:
         print("\n✓ Post-run script completed successfully")
