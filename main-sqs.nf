@@ -89,18 +89,56 @@ void checkAwsCredentials(String awsCmd, String encoding, int exitSuccess, String
     println(emptyLine)
 }
 
+// Helper method to check if file exists (supports both local and S3 paths)
+boolean fileExists(String path, String awsCmd, String encoding) {
+    if (path.startsWith('s3://')) {
+        // Use AWS CLI to check S3 file
+        Process p = [awsCmd, 's3', 'ls', path].execute()
+        p.waitFor()
+        return p.exitValue() == 0
+    } else {
+        // Check local file
+        File f = new File(path)
+        return f.exists() && f.length() > 0
+    }
+}
+
+// Helper method to get file size (supports both local and S3 paths)
+long getFileSize(String path, String awsCmd, String encoding) {
+    if (path.startsWith('s3://')) {
+        // Use AWS CLI to get S3 file size
+        Process p = [awsCmd, 's3', 'ls', path].execute()
+        p.waitFor()
+        if (p.exitValue() == 0) {
+            String output = p.inputStream.getText(encoding)
+            // Parse output like: "2024-12-02 15:30:00      11114 ro-crate-metadata.json"
+            def parts = output.trim().split(/\s+/)
+            if (parts.length >= 3) {
+                return parts[2] as long
+            }
+        }
+        return 0
+    } else {
+        File f = new File(path)
+        return f.length()
+    }
+}
+
 // Helper method to wait for and verify WRROC file
-boolean waitForWrrocFile(String wrrocPath, int maxWaitSeconds, int checkIntervalMs, String emptyLine, String separator) {
+boolean waitForWrrocFile(String wrrocPath, int maxWaitSeconds, int checkIntervalMs,
+                        String awsCmd, String encoding, String emptyLine, String separator) {
     println('Waiting for WRROC file to be written by nf-prov plugin...')
-    File wrrocFile = new File(wrrocPath)
+    println("Target path: ${wrrocPath}")
+    println("Path type: ${wrrocPath.startsWith('s3://') ? 'S3' : 'Local'}")
 
     int attempts = (maxWaitSeconds * 1000) / checkIntervalMs
     boolean wrrocFound = false
 
     for (int i = 0; i < attempts; i++) {
-        if (wrrocFile.exists() && wrrocFile.length() > 0) {
+        if (fileExists(wrrocPath, awsCmd, encoding)) {
+            long fileSize = getFileSize(wrrocPath, awsCmd, encoding)
             println("✓ WRROC file found: ${wrrocPath}")
-            println("  File size: ${wrrocFile.length()} bytes")
+            println("  File size: ${fileSize} bytes")
             wrrocFound = true
             break
         }
@@ -347,7 +385,7 @@ workflow.onComplete {
     String wrrocPath = "${outdir}/ro-crate-metadata.json"
     int maxWaitSeconds = 60
     int checkIntervalMs = 500
-    boolean wrrocFound = waitForWrrocFile(wrrocPath, maxWaitSeconds, checkIntervalMs, emptyLine, separator)
+    boolean wrrocFound = waitForWrrocFile(wrrocPath, maxWaitSeconds, checkIntervalMs, awsCmd, encoding, emptyLine, separator)
 
     // Step 4: Extract WRROC metadata
     Map<String, Object> wrrocMetadata = [:]
